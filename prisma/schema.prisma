@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Analysis {
+  id             String     @id
+  cv             String
+  jobDescription String
+  role           String     @default("")
+  n              Int
+  status         String     @default("pending")
+  advanceRate    Int        @default(0)
+  result         String     @default("{}")
+  totalTokens    Int        @default(0)
+  durationMs     Int        @default(0)
+  createdAt      DateTime   @default(now())
+  reactions      Reaction[]
+}
+
+model Reaction {
+  id           Int      @id @default(autoincrement())
+  analysisId   String
+  analysis     Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  index        Int
+  profile      String
+  wouldAdvance Boolean  @default(false)
+  reaction     String   @default("")
+  concerns     String   @default("[]")
+  positives    String   @default("[]")
+  tokens       Int      @default(0)
+  durationMs   Int      @default(0)
+  error        String   @default("")
+}
