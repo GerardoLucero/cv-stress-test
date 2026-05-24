@@ -3,48 +3,29 @@
 import { useState } from 'react'
 
 interface HiringManagerProfile {
-  name: string
-  role: string
-  company: string
-  yearsHiring: number
-  bias: string
+  name: string; role: string; company: string; yearsHiring: number; bias: string
 }
-
 interface ManagerReaction {
-  index: number
-  profile: HiringManagerProfile
-  wouldAdvance: boolean
-  reaction: string
-  concerns: string[]
-  positives: string[]
-  tokens: number
-  durationMs: number
-  error?: string
+  index: number; profile: HiringManagerProfile; wouldAdvance: boolean
+  reaction: string; concerns: string[]; positives: string[]
+  tokens: number; durationMs: number; error?: string
 }
-
-interface SuggestedRole {
-  role: string
-  fit: number
-  reason: string
+interface SuggestedRole { role: string; fit: number; reason: string }
+interface CourseRecommendation {
+  skill: string; platform: string; course: string; why: string
+  priority: 'high' | 'medium' | 'low'
 }
-
 interface AnalysisResult {
   advanceRate: number
   sentimentBreakdown: { strong_yes: number; lean_yes: number; lean_no: number; strong_no: number }
-  topStrengths: string[]
-  topConcerns: string[]
-  keyChanges: string[]
+  topStrengths: string[]; topConcerns: string[]; keyChanges: string[]
   suggestedRoles: SuggestedRole[]
   cvAdjustments: Array<{ section: string; action: string }>
-  verdict: string
-  oneLiner: string
+  courseRecommendations: CourseRecommendation[]
+  verdict: string; oneLiner: string
 }
-
 interface ApiResponse {
-  result: AnalysisResult
-  reactions: ManagerReaction[]
-  totalTokens: number
-  durationMs: number
+  result: AnalysisResult; reactions: ManagerReaction[]; totalTokens: number; durationMs: number
 }
 
 function FitBar({ fit }: { fit: number }) {
@@ -57,6 +38,13 @@ function FitBar({ fit }: { fit: number }) {
       <span className="fit-pct" style={{ color }}>{fit}%</span>
     </div>
   )
+}
+
+const PRIORITY_COLOR: Record<string, string> = {
+  high: 'var(--red)', medium: 'var(--accent)', low: 'var(--text-muted)'
+}
+const PRIORITY_LABEL: Record<string, string> = {
+  high: 'Alta prioridad', medium: 'Media', low: 'Complementario'
 }
 
 export default function Home() {
@@ -88,11 +76,15 @@ export default function Home() {
     }
   }
 
+  function downloadPDF() {
+    window.print()
+  }
+
   const visible = data?.reactions.filter(r => !r.error && r.reaction) ?? []
 
   return (
     <main>
-      <section className="hero">
+      <section className="hero no-print">
         <div className="container">
           <div className="hero-tag">
             <span className="badge badge-accent">⬡ AI-Powered</span>
@@ -106,29 +98,17 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="form-section">
+      <section className="form-section no-print">
         <div className="container">
           <form onSubmit={handleSubmit}>
             <div className="form-grid">
               <div className="field">
                 <label>Your CV</label>
-                <textarea
-                  value={cv}
-                  onChange={e => setCv(e.target.value)}
-                  placeholder="Paste your full CV here..."
-                  rows={14}
-                  required
-                />
+                <textarea value={cv} onChange={e => setCv(e.target.value)} placeholder="Paste your full CV here..." rows={14} required />
               </div>
               <div className="field">
                 <label>Job Description</label>
-                <textarea
-                  value={jobDescription}
-                  onChange={e => setJobDescription(e.target.value)}
-                  placeholder="Paste the job description here..."
-                  rows={14}
-                  required
-                />
+                <textarea value={jobDescription} onChange={e => setJobDescription(e.target.value)} placeholder="Paste the job description here..." rows={14} required />
               </div>
             </div>
             <div className="form-footer">
@@ -146,7 +126,7 @@ export default function Home() {
       </section>
 
       {loading && (
-        <div className="container loading-section">
+        <div className="container loading-section no-print">
           <div className="card loading-card">
             <div className="spinner" />
             <span>Simulating <strong>{n} industry-specific hiring managers</strong>… ~{n * 4}s</span>
@@ -155,13 +135,26 @@ export default function Home() {
       )}
 
       {error && (
-        <div className="container">
+        <div className="container no-print">
           <div className="card error-card">{error}</div>
         </div>
       )}
 
       {data && (
-        <section className="container results">
+        <section className="container results" id="report">
+
+          {/* Print header — only visible in PDF */}
+          <div className="print-header">
+            <h1>CV Stress Test — Report</h1>
+            <p className="print-meta">Generated on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          </div>
+
+          {/* Download button */}
+          <div className="report-actions no-print">
+            <button className="btn btn-outline" onClick={downloadPDF}>
+              ⤓ Download PDF
+            </button>
+          </div>
 
           {/* Advance rate + verdict */}
           <div className="summary-grid">
@@ -181,7 +174,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Suggested roles with fit score */}
+          {/* Suggested roles */}
           {data.result.suggestedRoles.length > 0 && (
             <div className="card roles-card">
               <h3 className="section-title">⬡ Roles you can apply to now</h3>
@@ -205,21 +198,15 @@ export default function Home() {
           <div className="insights-grid">
             <div className="card">
               <h3 className="section-title insights-title strengths">✓ Strengths</h3>
-              <ul className="insights-list">
-                {data.result.topStrengths.map((s, i) => <li key={i}>{s}</li>)}
-              </ul>
+              <ul className="insights-list">{data.result.topStrengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
             </div>
             <div className="card">
               <h3 className="section-title insights-title concerns">✗ Concerns</h3>
-              <ul className="insights-list">
-                {data.result.topConcerns.map((c, i) => <li key={i}>{c}</li>)}
-              </ul>
+              <ul className="insights-list">{data.result.topConcerns.map((c, i) => <li key={i}>{c}</li>)}</ul>
             </div>
             <div className="card">
               <h3 className="section-title insights-title changes">→ Key Changes</h3>
-              <ul className="insights-list">
-                {data.result.keyChanges.map((k, i) => <li key={i}>{k}</li>)}
-              </ul>
+              <ul className="insights-list">{data.result.keyChanges.map((k, i) => <li key={i}>{k}</li>)}</ul>
             </div>
           </div>
 
@@ -234,6 +221,32 @@ export default function Home() {
                     <span className="adj-action">{adj.action}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Course Recommendations */}
+          {data.result.courseRecommendations.length > 0 && (
+            <div className="card courses-card">
+              <h3 className="section-title">▣ Courses to close the gap</h3>
+              <div className="courses-list">
+                {data.result.courseRecommendations
+                  .sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.priority] ?? 1) - ({ high: 0, medium: 1, low: 2 }[b.priority] ?? 1))
+                  .map((c, i) => (
+                    <div key={i} className="course-item">
+                      <div className="course-header">
+                        <div className="course-meta">
+                          <span className="course-skill">{c.skill}</span>
+                          <span className="course-platform">{c.platform}</span>
+                        </div>
+                        <span className="course-priority" style={{ color: PRIORITY_COLOR[c.priority] }}>
+                          {PRIORITY_LABEL[c.priority]}
+                        </span>
+                      </div>
+                      <p className="course-name">{c.course}</p>
+                      <p className="course-why">{c.why}</p>
+                    </div>
+                  ))}
               </div>
             </div>
           )}
@@ -267,7 +280,7 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="footer-meta">
+          <div className="footer-meta no-print">
             <span className="badge">{visible.length} managers · {data.totalTokens.toLocaleString()} tokens · {(data.durationMs / 1000).toFixed(1)}s</span>
             <span className="badge badge-accent">Powered by Groq + LLaMA 3</span>
           </div>
