@@ -28,6 +28,14 @@ interface ApiResponse {
   result: AnalysisResult; reactions: ManagerReaction[]; totalTokens: number; durationMs: number
 }
 
+const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
+const PRIORITY_COLOR: Record<string, string> = {
+  high: 'var(--red)', medium: 'var(--accent)', low: 'var(--text-muted)'
+}
+const PRIORITY_LABEL: Record<string, string> = {
+  high: 'Alta prioridad', medium: 'Media', low: 'Complementario'
+}
+
 function FitBar({ fit }: { fit: number }) {
   const color = fit >= 75 ? 'var(--green)' : fit >= 50 ? 'var(--primary-light)' : 'var(--accent)'
   return (
@@ -40,13 +48,6 @@ function FitBar({ fit }: { fit: number }) {
   )
 }
 
-const PRIORITY_COLOR: Record<string, string> = {
-  high: 'var(--red)', medium: 'var(--accent)', low: 'var(--text-muted)'
-}
-const PRIORITY_LABEL: Record<string, string> = {
-  high: 'Alta prioridad', medium: 'Media', low: 'Complementario'
-}
-
 export default function Home() {
   const [cv, setCv] = useState('')
   const [jobDescription, setJobDescription] = useState('')
@@ -54,6 +55,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<ApiResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [runCount, setRunCount] = useState(0)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -69,6 +71,7 @@ export default function Home() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Unknown error')
       setData(json)
+      setRunCount(c => c + 1)
     } catch (err) {
       setError(String(err))
     } finally {
@@ -76,11 +79,12 @@ export default function Home() {
     }
   }
 
-  function downloadPDF() {
-    window.print()
-  }
-
   const visible = data?.reactions.filter(r => !r.error && r.reaction) ?? []
+  // Sorted copies — never mutate state arrays
+  const sortedRoles = [...(data?.result.suggestedRoles ?? [])].sort((a, b) => b.fit - a.fit)
+  const sortedCourses = [...(data?.result.courseRecommendations ?? [])].sort(
+    (a, b) => (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1)
+  )
 
   return (
     <main>
@@ -141,22 +145,17 @@ export default function Home() {
       )}
 
       {data && (
-        <section className="container results" id="report">
+        <section key={runCount} className="container results" id="report">
 
-          {/* Print header — only visible in PDF */}
           <div className="print-header">
             <h1>CV Stress Test — Report</h1>
             <p className="print-meta">Generated on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
           </div>
 
-          {/* Download button */}
           <div className="report-actions no-print">
-            <button className="btn btn-outline" onClick={downloadPDF}>
-              ⤓ Download PDF
-            </button>
+            <button className="btn btn-outline" onClick={() => window.print()}>⤓ Download PDF</button>
           </div>
 
-          {/* Advance rate + verdict */}
           <div className="summary-grid">
             <div className="card advance-card">
               <div className="advance-rate">
@@ -174,27 +173,23 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Suggested roles */}
-          {data.result.suggestedRoles.length > 0 && (
+          {sortedRoles.length > 0 && (
             <div className="card roles-card">
               <h3 className="section-title">⬡ Roles you can apply to now</h3>
               <div className="roles-list">
-                {data.result.suggestedRoles
-                  .sort((a, b) => b.fit - a.fit)
-                  .map((r, i) => (
-                    <div key={i} className="role-item">
-                      <div className="role-header">
-                        <span className="role-name">{r.role}</span>
-                        <FitBar fit={r.fit} />
-                      </div>
-                      <p className="role-reason">{r.reason}</p>
+                {sortedRoles.map((r, i) => (
+                  <div key={i} className="role-item">
+                    <div className="role-header">
+                      <span className="role-name">{r.role}</span>
+                      <FitBar fit={r.fit} />
                     </div>
-                  ))}
+                    <p className="role-reason">{r.reason}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Insights */}
           <div className="insights-grid">
             <div className="card">
               <h3 className="section-title insights-title strengths">✓ Strengths</h3>
@@ -210,7 +205,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* CV Adjustments */}
           {data.result.cvAdjustments.length > 0 && (
             <div className="card adjustments-card">
               <h3 className="section-title">✎ CV Adjustments</h3>
@@ -225,33 +219,29 @@ export default function Home() {
             </div>
           )}
 
-          {/* Course Recommendations */}
-          {data.result.courseRecommendations.length > 0 && (
+          {sortedCourses.length > 0 && (
             <div className="card courses-card">
               <h3 className="section-title">▣ Courses to close the gap</h3>
               <div className="courses-list">
-                {data.result.courseRecommendations
-                  .sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.priority] ?? 1) - ({ high: 0, medium: 1, low: 2 }[b.priority] ?? 1))
-                  .map((c, i) => (
-                    <div key={i} className="course-item">
-                      <div className="course-header">
-                        <div className="course-meta">
-                          <span className="course-skill">{c.skill}</span>
-                          <span className="course-platform">{c.platform}</span>
-                        </div>
-                        <span className="course-priority" style={{ color: PRIORITY_COLOR[c.priority] }}>
-                          {PRIORITY_LABEL[c.priority]}
-                        </span>
+                {sortedCourses.map((c, i) => (
+                  <div key={i} className="course-item">
+                    <div className="course-header">
+                      <div className="course-meta">
+                        <span className="course-skill">{c.skill}</span>
+                        <span className="course-platform">{c.platform}</span>
                       </div>
-                      <p className="course-name">{c.course}</p>
-                      <p className="course-why">{c.why}</p>
+                      <span className="course-priority" style={{ color: PRIORITY_COLOR[c.priority] }}>
+                        {PRIORITY_LABEL[c.priority]}
+                      </span>
                     </div>
-                  ))}
+                    <p className="course-name">{c.course}</p>
+                    <p className="course-why">{c.why}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Reactions */}
           <h2 className="section-title reactions-title">Hiring Manager Reactions</h2>
           <div className="reactions-grid">
             {visible.map(r => (
