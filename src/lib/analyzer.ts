@@ -29,6 +29,14 @@ export interface SuggestedRole {
   reason: string
 }
 
+export interface CourseRecommendation {
+  skill: string
+  platform: string
+  course: string
+  why: string
+  priority: 'high' | 'medium' | 'low'
+}
+
 export interface AnalysisResult {
   advanceRate: number
   sentimentBreakdown: { strong_yes: number; lean_yes: number; lean_no: number; strong_no: number }
@@ -37,6 +45,7 @@ export interface AnalysisResult {
   keyChanges: string[]
   suggestedRoles: SuggestedRole[]
   cvAdjustments: Array<{ section: string; action: string }>
+  courseRecommendations: CourseRecommendation[]
   verdict: string
   oneLiner: string
 }
@@ -56,23 +65,23 @@ CRITICAL: The managers must be specific to the industry and function of this rol
 - If the role is in data/AI → generate data science leads, ML platform managers, analytics directors
 - If the role is in design → generate design directors, product design managers, creative directors
 - If the role is in finance → generate CFOs, finance directors, controllers, VP Finance
-- If the role is in sales → generate sales directors, VPs of Sales, account executives leads, revenue managers
+- If the role is in sales → generate sales directors, VPs of Sales, revenue managers
 - If the role is in product → generate CPOs, product directors, senior PMs, heads of product
-- Match the seniority of the managers to the seniority implied in the role
-- Mix company sizes: startups, scale-ups, enterprise, agencies, consultancies
+- Match manager seniority to the seniority implied in the role
+- Mix company sizes: startups, scale-ups, enterprise, agencies
 - International name diversity
 
 Balance (strictly follow):
-- ${positiveCount} managers should be growth-minded: value potential, trajectory, and coachability
+- ${positiveCount} managers should be growth-minded: value potential, trajectory, coachability
 - The rest should be traditional: value exact experience match and proven track record
 
 Return JSON array of exactly ${n} objects (no markdown):
 [{
   "name": "Full Name",
-  "role": "Specific title at specific company type — e.g. VP of Marketing at D2C E-commerce Scale-up",
-  "company": "Industry and stage — e.g. 'D2C E-commerce, Series B'",
+  "role": "Specific title at specific company type",
+  "company": "Industry and stage",
   "yearsHiring": 6,
-  "bias": "One sentence — their specific lens when evaluating candidates for this type of role"
+  "bias": "One sentence — their specific evaluation lens for this type of role"
 }]`,
     maxTokens: 2000,
   })
@@ -108,7 +117,7 @@ export async function runManager(
 You have been hiring for ${manager.yearsHiring} years in this industry.
 Your evaluation lens: ${manager.bias}
 
-Review the CV for this specific role. Be direct and specific — reference actual things you see.
+Review the CV for this specific role. Be direct — reference actual things you see.
 Respond in first person. 3-5 sentences. Always mention at least one concrete positive.`,
       prompt: `ROLE WE ARE HIRING FOR:\n${jobDescription}\n\nCANDIDATE CV:\n${cv}\n\nWhat is your honest reaction? Would you advance this candidate?`,
       maxTokens: 400,
@@ -186,27 +195,33 @@ Return JSON only:
 {
   "topStrengths": ["3 concrete strengths from this specific CV"],
   "topConcerns": ["3 recurring concerns — specific to what this CV shows or lacks"],
-  "keyChanges": ["3 highest-impact changes to increase the advance rate — concrete and actionable"],
+  "keyChanges": ["3 highest-impact changes to increase the advance rate"],
   "suggestedRoles": [
-    {
-      "role": "Specific job title",
-      "fit": 85,
-      "reason": "One sentence explaining why this candidate fits this role based on their actual experience"
-    }
+    { "role": "Specific job title", "fit": 85, "reason": "Why this candidate fits based on their actual experience" }
   ],
   "cvAdjustments": [
-    {"section": "e.g. Work Experience", "action": "Specific thing to add, rewrite, or remove"},
-    {"section": "...", "action": "..."},
-    {"section": "...", "action": "..."},
-    {"section": "...", "action": "..."},
-    {"section": "...", "action": "..."}
+    { "section": "e.g. Work Experience", "action": "Specific thing to add, rewrite, or remove" },
+    { "section": "...", "action": "..." },
+    { "section": "...", "action": "..." },
+    { "section": "...", "action": "..." },
+    { "section": "...", "action": "..." }
+  ],
+  "courseRecommendations": [
+    {
+      "skill": "The specific skill gap this course addresses",
+      "platform": "Coursera | Udemy | LinkedIn Learning | YouTube | edX | freeCodeCamp",
+      "course": "Exact course or resource name",
+      "why": "One sentence: how completing this directly improves their candidacy for the target role",
+      "priority": "high"
+    }
   ],
   "verdict": "2-3 honest sentences. If advance rate is low, explain the real gap.",
   "oneLiner": "One sentence a recruiter would say to describe this candidate"
 }
 
-For suggestedRoles: generate 5 specific job titles this candidate can realistically apply to NOW based on their actual CV. Include fit score 0-100 and a concrete reason. Be encouraging but realistic.`,
-    maxTokens: 1000,
+For suggestedRoles: 5 specific job titles this candidate can realistically apply to NOW. Include fit score 0-100.
+For courseRecommendations: 4-5 courses targeting the exact gaps identified. Match platform to the type of skill (technical → Coursera/Udemy, soft skills → LinkedIn Learning, etc). priority: high = blocks advancement, medium = would help, low = nice to have.`,
+    maxTokens: 1200,
   })
 
   const sentimentBreakdown = {
@@ -219,13 +234,13 @@ For suggestedRoles: generate 5 specific job titles this candidate can realistica
   try {
     const parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())
     return {
-      advanceRate,
-      sentimentBreakdown,
+      advanceRate, sentimentBreakdown,
       topStrengths: parsed.topStrengths ?? [],
       topConcerns: parsed.topConcerns ?? [],
       keyChanges: parsed.keyChanges ?? [],
       suggestedRoles: parsed.suggestedRoles ?? [],
       cvAdjustments: parsed.cvAdjustments ?? [],
+      courseRecommendations: parsed.courseRecommendations ?? [],
       verdict: parsed.verdict ?? '',
       oneLiner: parsed.oneLiner ?? '',
     }
@@ -233,7 +248,7 @@ For suggestedRoles: generate 5 specific job titles this candidate can realistica
     return {
       advanceRate, sentimentBreakdown,
       topStrengths: [], topConcerns: [], keyChanges: [],
-      suggestedRoles: [], cvAdjustments: [],
+      suggestedRoles: [], cvAdjustments: [], courseRecommendations: [],
       verdict: `${advanceRate}% of hiring managers would advance this candidate.`,
       oneLiner: 'A candidate with relevant experience.',
     }
