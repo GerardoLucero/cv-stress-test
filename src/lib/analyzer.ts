@@ -96,7 +96,7 @@ Respond in first person. 3-5 sentences. Do not be generic. Name specific things 
       maxTokens: 400,
     })
 
-    const tokens = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
+    const tokens = (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0)
 
     const { text: structured } = await generateText({
       model: groq('llama-3.1-8b-instant'),
