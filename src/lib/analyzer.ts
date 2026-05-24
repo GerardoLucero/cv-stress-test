@@ -56,7 +56,7 @@ Return JSON array of exactly ${n} objects (no markdown):
   "yearsHiring": 5,
   "bias": "One sentence — their known lens when reviewing candidates"
 }]`,
-    maxOutputTokens: 2000,
+    maxTokens: 2000,
   })
 
   try {
@@ -93,7 +93,7 @@ Your evaluation lens: ${manager.bias}
 You are reviewing a CV for this role. Be direct and honest — you see dozens of CVs per week.
 Respond in first person. 3-5 sentences. Do not be generic. Name specific things you see.`,
       prompt: `ROLE WE ARE HIRING FOR:\n${jobDescription}\n\nCANDIDATE CV:\n${cv}\n\nWhat is your honest reaction? Would you advance this candidate?`,
-      maxOutputTokens: 400,
+      maxTokens: 400,
     })
 
     const tokens = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
@@ -109,7 +109,7 @@ Respond in first person. 3-5 sentences. Do not be generic. Name specific things 
 Reaction: "${rawReaction}"
 
 Return JSON only: {"wouldAdvance": true, "concerns": ["..."], "positives": ["..."]}`,
-      maxOutputTokens: 200,
+      maxTokens: 200,
     })
 
     let wouldAdvance = false
@@ -169,7 +169,7 @@ Return JSON only:
   "verdict": "2-3 sentence honest verdict on this CV for this role",
   "oneLiner": "One sentence summary a manager would use to describe this candidate to a colleague"
 }`,
-    maxOutputTokens: 600,
+    maxTokens: 600,
   })
 
   const sentimentBreakdown = {
