@@ -29,6 +29,8 @@ export interface AnalysisResult {
   topStrengths: string[]
   topConcerns: string[]
   keyChanges: string[]
+  suggestedRoles: string[]
+  cvAdjustments: Array<{ section: string; action: string }>
   verdict: string
   oneLiner: string
 }
@@ -36,17 +38,19 @@ export interface AnalysisResult {
 // ─── Step 1: Generate N hiring managers ────────────────────────────────────
 
 export async function generateManagers(n: number, role: string): Promise<HiringManagerProfile[]> {
+  const positiveCount = Math.round(n * 0.45)
   const { text } = await generateText({
     model: groq('llama-3.1-8b-instant'),
     system: 'You are a persona generation engine. Return only valid JSON arrays, no markdown.',
-    prompt: `Generate exactly ${n} distinct hiring managers who would evaluate a candidate for this role: "${role}"
+    prompt: `Generate exactly ${n} distinct hiring managers who would evaluate a candidate for: "${role}"
 
-Rules:
+Balance rules (strictly follow):
+- ${positiveCount} of them should be growth-minded: value potential, coachability, and trajectory over perfect credentials
+- The rest are traditional: value years of experience, exact skill match, proven track record
 - Mix of company sizes: startups, scale-ups, enterprise
-- Mix of technical depth: some ex-engineers, some pure managers
-- Mix of seniority levels: engineering managers, senior managers, directors
-- International diversity in names and company backgrounds
-- Include both open-minded and skeptical hiring managers
+- Mix of technical depth: ex-engineers, product managers, pure people managers
+- Mix of seniority: engineering managers, senior managers, directors
+- International name diversity
 
 Return JSON array of exactly ${n} objects (no markdown):
 [{
@@ -54,7 +58,7 @@ Return JSON array of exactly ${n} objects (no markdown):
   "role": "e.g. Engineering Manager at Series B startup",
   "company": "Type and stage, e.g. 'B2B SaaS Series B'",
   "yearsHiring": 5,
-  "bias": "One sentence — their known lens when reviewing candidates"
+  "bias": "One sentence — their specific evaluation lens"
 }]`,
     maxTokens: 2000,
   })
@@ -68,7 +72,7 @@ Return JSON array of exactly ${n} objects (no markdown):
       role: 'Engineering Manager',
       company: 'Tech company',
       yearsHiring: 5,
-      bias: 'Evaluates candidates based on impact and technical depth',
+      bias: 'Evaluates candidates based on impact and growth potential',
     }))
   }
 }
@@ -90,8 +94,8 @@ export async function runManager(
 You have been hiring engineers for ${manager.yearsHiring} years.
 Your evaluation lens: ${manager.bias}
 
-You are reviewing a CV for this role. Be direct and honest — you see dozens of CVs per week.
-Respond in first person. 3-5 sentences. Do not be generic. Name specific things you see.`,
+You are reviewing a CV for a specific role. Be direct and specific — reference actual things you see in the CV.
+Respond in first person. 3-5 sentences. Always mention at least one concrete positive from the CV.`,
       prompt: `ROLE WE ARE HIRING FOR:\n${jobDescription}\n\nCANDIDATE CV:\n${cv}\n\nWhat is your honest reaction? Would you advance this candidate?`,
       maxTokens: 400,
     })
@@ -102,9 +106,9 @@ Respond in first person. 3-5 sentences. Do not be generic. Name specific things 
       model: groq('llama-3.1-8b-instant'),
       system: 'Extract structured data from a hiring manager reaction. Return only valid JSON, no markdown.',
       prompt: `From this hiring manager reaction, extract:
-1. wouldAdvance: true/false — would they move this candidate forward?
-2. concerns: array of 2-3 specific concerns they raised (or implied)
-3. positives: array of 2-3 specific positives they mentioned (or implied)
+1. wouldAdvance: true/false
+2. concerns: 2-3 specific concerns raised (empty array if they would advance enthusiastically)
+3. positives: 2-3 specific positives mentioned
 
 Reaction: "${rawReaction}"
 
@@ -149,27 +153,38 @@ export async function synthesizeResults(
 
   const { text } = await generateText({
     model: groq('llama-3.3-70b-versatile'),
-    system: 'You are a senior career coach synthesizing hiring manager feedback. Return only valid JSON, no markdown.',
+    system: 'You are a senior career coach and recruiter with 15 years of experience. Return only valid JSON, no markdown.',
     prompt: `Synthesize ${successful.length} hiring manager reactions to this CV.
 
-ROLE: ${jobDescription.slice(0, 300)}
+TARGET ROLE: ${jobDescription.slice(0, 300)}
 ADVANCE RATE: ${advanceRate}% (${advanceCount} of ${successful.length} would advance)
 
 SAMPLE REACTIONS:
 ${sampleReactions}
 
-ALL CONCERNS RAISED: ${allConcerns.join(' | ')}
-ALL POSITIVES NOTED: ${allPositives.join(' | ')}
+ALL CONCERNS: ${allConcerns.join(' | ')}
+ALL POSITIVES: ${allPositives.join(' | ')}
+
+FULL CV:
+${cv.slice(0, 1500)}
 
 Return JSON only:
 {
-  "topStrengths": ["top 3 things that consistently impressed managers"],
-  "topConcerns": ["top 3 concerns that appeared most frequently"],
-  "keyChanges": ["top 3 concrete, specific changes that would increase the advance rate"],
-  "verdict": "2-3 sentence honest verdict on this CV for this role",
-  "oneLiner": "One sentence summary a manager would use to describe this candidate to a colleague"
+  "topStrengths": ["3 concrete strengths from the CV that impressed managers"],
+  "topConcerns": ["3 recurring concerns — be specific, not generic"],
+  "keyChanges": ["3 highest-impact changes to increase the advance rate — concrete, not vague"],
+  "suggestedRoles": ["5 specific job titles this candidate is genuinely well-suited for based on their actual experience and skills — be realistic and encouraging"],
+  "cvAdjustments": [
+    {"section": "e.g. Work Experience", "action": "Specific thing to add, rewrite, or remove"},
+    {"section": "...", "action": "..."},
+    {"section": "...", "action": "..."},
+    {"section": "...", "action": "..."},
+    {"section": "...", "action": "..."}
+  ],
+  "verdict": "2-3 honest sentences about this CV for this role. If advance rate is low, explain why and what the real gap is.",
+  "oneLiner": "One sentence a recruiter would say to describe this candidate"
 }`,
-    maxTokens: 600,
+    maxTokens: 900,
   })
 
   const sentimentBreakdown = {
@@ -181,8 +196,28 @@ Return JSON only:
 
   try {
     const parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())
-    return { advanceRate, sentimentBreakdown, topStrengths: parsed.topStrengths ?? [], topConcerns: parsed.topConcerns ?? [], keyChanges: parsed.keyChanges ?? [], verdict: parsed.verdict ?? '', oneLiner: parsed.oneLiner ?? '' }
+    return {
+      advanceRate,
+      sentimentBreakdown,
+      topStrengths: parsed.topStrengths ?? [],
+      topConcerns: parsed.topConcerns ?? [],
+      keyChanges: parsed.keyChanges ?? [],
+      suggestedRoles: parsed.suggestedRoles ?? [],
+      cvAdjustments: parsed.cvAdjustments ?? [],
+      verdict: parsed.verdict ?? '',
+      oneLiner: parsed.oneLiner ?? '',
+    }
   } catch {
-    return { advanceRate, sentimentBreakdown, topStrengths: [], topConcerns: [], keyChanges: ['Review and strengthen your CV based on the job requirements'], verdict: `${advanceRate}% of hiring managers would advance this candidate.`, oneLiner: 'A candidate with relevant experience.' }
+    return {
+      advanceRate,
+      sentimentBreakdown,
+      topStrengths: [],
+      topConcerns: [],
+      keyChanges: [],
+      suggestedRoles: [],
+      cvAdjustments: [],
+      verdict: `${advanceRate}% of hiring managers would advance this candidate.`,
+      oneLiner: 'A candidate with relevant experience.',
+    }
   }
 }

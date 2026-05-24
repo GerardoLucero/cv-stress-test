@@ -28,6 +28,8 @@ interface AnalysisResult {
   topStrengths: string[]
   topConcerns: string[]
   keyChanges: string[]
+  suggestedRoles: string[]
+  cvAdjustments: Array<{ section: string; action: string }>
   verdict: string
   oneLiner: string
 }
@@ -80,7 +82,8 @@ export default function Home() {
           </div>
           <h1>CV <span className="gradient-text">Stress Test</span></h1>
           <p className="hero-sub">
-            Simulate how <strong>N hiring managers</strong> react to your CV — before you send it.
+            Simulate how <strong>N hiring managers</strong> react to your CV.
+            Discover what roles fit you and exactly what to fix.
           </p>
         </div>
       </section>
@@ -120,7 +123,7 @@ export default function Home() {
                 <span className="n-hint">3 = fast · 10 = thorough</span>
               </div>
               <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Simulating...' : `Run Stress Test →`}
+                {loading ? 'Simulating...' : 'Run Stress Test →'}
               </button>
             </div>
           </form>
@@ -131,7 +134,7 @@ export default function Home() {
         <div className="container loading-section">
           <div className="card loading-card">
             <div className="spinner" />
-            <span>Simulating <strong>{n} hiring managers</strong>… takes ~{n * 3}s</span>
+            <span>Simulating <strong>{n} hiring managers</strong>… takes ~{n * 4}s</span>
           </div>
         </div>
       )}
@@ -144,6 +147,8 @@ export default function Home() {
 
       {data && (
         <section className="container results">
+
+          {/* Summary row */}
           <div className="summary-grid">
             <div className="card advance-card">
               <div className="advance-rate">
@@ -161,6 +166,19 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Suggested roles */}
+          {data.result.suggestedRoles.length > 0 && (
+            <div className="card roles-card">
+              <h3 className="section-title">⬡ Roles you’re well-suited for</h3>
+              <div className="roles-list">
+                {data.result.suggestedRoles.map((role, i) => (
+                  <span key={i} className="role-badge">{role}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Insights grid */}
           <div className="insights-grid">
             <div className="card">
               <h3 className="section-title insights-title strengths">✓ Strengths</h3>
@@ -182,6 +200,22 @@ export default function Home() {
             </div>
           </div>
 
+          {/* CV Adjustments */}
+          {data.result.cvAdjustments.length > 0 && (
+            <div className="card adjustments-card">
+              <h3 className="section-title">✎ CV Adjustments</h3>
+              <div className="adjustments-list">
+                {data.result.cvAdjustments.map((adj, i) => (
+                  <div key={i} className="adjustment-item">
+                    <span className="adj-section">{adj.section}</span>
+                    <span className="adj-action">{adj.action}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Hiring manager reactions */}
           <h2 className="section-title reactions-title">Hiring Manager Reactions</h2>
           <div className="reactions-grid">
             {visible.map(r => (
@@ -196,8 +230,15 @@ export default function Home() {
                   </span>
                 </div>
                 <p className="reaction-text">{r.reaction}</p>
-                {r.concerns.length > 0 && (
+                {r.positives.length > 0 && (
                   <div className="reaction-tags">
+                    {r.positives.map((p, i) => (
+                      <span key={i} className="badge positive-tag">{p}</span>
+                    ))}
+                  </div>
+                )}
+                {r.concerns.length > 0 && (
+                  <div className="reaction-tags" style={{ marginTop: '0.4rem' }}>
                     {r.concerns.map((c, i) => (
                       <span key={i} className="badge concern-tag">{c}</span>
                     ))}
