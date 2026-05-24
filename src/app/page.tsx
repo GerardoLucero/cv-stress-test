@@ -25,7 +25,8 @@ interface AnalysisResult {
   verdict: string; oneLiner: string
 }
 interface ApiResponse {
-  result: AnalysisResult; reactions: ManagerReaction[]; totalTokens: number; durationMs: number
+  result: AnalysisResult; reactions: ManagerReaction[]
+  totalTokens: number; durationMs: number; warning?: string
 }
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
@@ -80,7 +81,6 @@ export default function Home() {
   }
 
   const visible = data?.reactions.filter(r => !r.error && r.reaction) ?? []
-  // Sorted copies — never mutate state arrays
   const sortedRoles = [...(data?.result.suggestedRoles ?? [])].sort((a, b) => b.fit - a.fit)
   const sortedCourses = [...(data?.result.courseRecommendations ?? [])].sort(
     (a, b) => (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1)
@@ -93,12 +93,13 @@ export default function Home() {
           <div className="hero-tag">
             <span className="badge badge-accent">⬡ AI-Powered</span>
             <span className="badge">Groq · LLaMA 3</span>
+            <span className="badge">Free & Open Source</span>
           </div>
           <h1>CV <span className="gradient-text">Stress Test</span></h1>
           <p className="hero-sub">
-            Simulate how <strong>N hiring managers</strong> react to your CV.
-            Discover what roles fit you and exactly what to fix.
+            <strong>N hiring managers</strong> read your CV. See what they think.
           </p>
+          <p className="hero-sub2">Discover which roles fit you and exactly what to fix — before you send it.</p>
         </div>
       </section>
 
@@ -133,7 +134,7 @@ export default function Home() {
         <div className="container loading-section no-print">
           <div className="card loading-card">
             <div className="spinner" />
-            <span>Simulating <strong>{n} industry-specific hiring managers</strong>… ~{n * 4}s</span>
+            <span>Simulating <strong>{n} industry-specific hiring managers</strong>… ~{n * 3}s</span>
           </div>
         </div>
       )}
@@ -155,6 +156,12 @@ export default function Home() {
           <div className="report-actions no-print">
             <button className="btn btn-outline" onClick={() => window.print()}>⤓ Download PDF</button>
           </div>
+
+          {data.warning && (
+            <div className="warning-card no-print">
+              ⚠️ {data.warning}
+            </div>
+          )}
 
           <div className="summary-grid">
             <div className="card advance-card">
@@ -268,6 +275,27 @@ export default function Home() {
                 )}
               </div>
             ))}
+          </div>
+
+          {/* Support + GitHub CTA */}
+          <div className="support-section">
+            <div className="support-inner">
+              <div className="support-text">
+                <p className="support-title">Did this help your job search?</p>
+                <p className="support-sub">This tool is free and open source. Support keeps it running.</p>
+              </div>
+              <div className="support-actions">
+                <a href="https://github.com/GerardoLucero/cv-stress-test" target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                  ★ Star on GitHub
+                </a>
+                <a href="https://ko-fi.com/gerardolucero" target="_blank" rel="noopener noreferrer" className="btn btn-kofi">
+                  Ko-fi
+                </a>
+                <a href="https://buymeacoffee.com/lucerorios0" target="_blank" rel="noopener noreferrer" className="btn btn-bmc">
+                  Buy Me a Coffee
+                </a>
+              </div>
+            </div>
           </div>
 
           <div className="footer-meta no-print">
