@@ -23,42 +23,56 @@ export interface ManagerReaction {
   error?: string
 }
 
+export interface SuggestedRole {
+  role: string
+  fit: number
+  reason: string
+}
+
 export interface AnalysisResult {
   advanceRate: number
   sentimentBreakdown: { strong_yes: number; lean_yes: number; lean_no: number; strong_no: number }
   topStrengths: string[]
   topConcerns: string[]
   keyChanges: string[]
-  suggestedRoles: string[]
+  suggestedRoles: SuggestedRole[]
   cvAdjustments: Array<{ section: string; action: string }>
   verdict: string
   oneLiner: string
 }
 
-// ─── Step 1: Generate N hiring managers ────────────────────────────────────
+// ─── Step 1: Generate N industry-specific hiring managers ─────────────────
 
 export async function generateManagers(n: number, role: string): Promise<HiringManagerProfile[]> {
   const positiveCount = Math.round(n * 0.45)
   const { text } = await generateText({
     model: groq('llama-3.1-8b-instant'),
     system: 'You are a persona generation engine. Return only valid JSON arrays, no markdown.',
-    prompt: `Generate exactly ${n} distinct hiring managers who would evaluate a candidate for: "${role}"
+    prompt: `Generate exactly ${n} distinct hiring managers who would realistically evaluate a candidate for: "${role}"
 
-Balance rules (strictly follow):
-- ${positiveCount} of them should be growth-minded: value potential, coachability, and trajectory over perfect credentials
-- The rest are traditional: value years of experience, exact skill match, proven track record
-- Mix of company sizes: startups, scale-ups, enterprise
-- Mix of technical depth: ex-engineers, product managers, pure people managers
-- Mix of seniority: engineering managers, senior managers, directors
+CRITICAL: The managers must be specific to the industry and function of this role.
+- If the role is in marketing → generate marketing directors, CMOs, brand managers, growth leads
+- If the role is in engineering → generate engineering managers, CTOs, tech leads, VPs of Engineering
+- If the role is in data/AI → generate data science leads, ML platform managers, analytics directors
+- If the role is in design → generate design directors, product design managers, creative directors
+- If the role is in finance → generate CFOs, finance directors, controllers, VP Finance
+- If the role is in sales → generate sales directors, VPs of Sales, account executives leads, revenue managers
+- If the role is in product → generate CPOs, product directors, senior PMs, heads of product
+- Match the seniority of the managers to the seniority implied in the role
+- Mix company sizes: startups, scale-ups, enterprise, agencies, consultancies
 - International name diversity
+
+Balance (strictly follow):
+- ${positiveCount} managers should be growth-minded: value potential, trajectory, and coachability
+- The rest should be traditional: value exact experience match and proven track record
 
 Return JSON array of exactly ${n} objects (no markdown):
 [{
   "name": "Full Name",
-  "role": "e.g. Engineering Manager at Series B startup",
-  "company": "Type and stage, e.g. 'B2B SaaS Series B'",
-  "yearsHiring": 5,
-  "bias": "One sentence — their specific evaluation lens"
+  "role": "Specific title at specific company type — e.g. VP of Marketing at D2C E-commerce Scale-up",
+  "company": "Industry and stage — e.g. 'D2C E-commerce, Series B'",
+  "yearsHiring": 6,
+  "bias": "One sentence — their specific lens when evaluating candidates for this type of role"
 }]`,
     maxTokens: 2000,
   })
@@ -69,15 +83,15 @@ Return JSON array of exactly ${n} objects (no markdown):
   } catch {
     return Array.from({ length: n }, (_, i) => ({
       name: `Hiring Manager ${i + 1}`,
-      role: 'Engineering Manager',
+      role: 'Director of Talent',
       company: 'Tech company',
       yearsHiring: 5,
-      bias: 'Evaluates candidates based on impact and growth potential',
+      bias: 'Evaluates candidates based on impact, growth potential, and culture fit',
     }))
   }
 }
 
-// ─── Step 2: Run a single manager's evaluation ────────────────────────────
+// ─── Step 2: Run a single manager’s evaluation ────────────────────────────
 
 export async function runManager(
   manager: HiringManagerProfile,
@@ -91,11 +105,11 @@ export async function runManager(
     const { text: rawReaction, usage } = await generateText({
       model: groq('llama-3.1-8b-instant'),
       system: `You are ${manager.name}, ${manager.role} at ${manager.company}.
-You have been hiring engineers for ${manager.yearsHiring} years.
+You have been hiring for ${manager.yearsHiring} years in this industry.
 Your evaluation lens: ${manager.bias}
 
-You are reviewing a CV for a specific role. Be direct and specific — reference actual things you see in the CV.
-Respond in first person. 3-5 sentences. Always mention at least one concrete positive from the CV.`,
+Review the CV for this specific role. Be direct and specific — reference actual things you see.
+Respond in first person. 3-5 sentences. Always mention at least one concrete positive.`,
       prompt: `ROLE WE ARE HIRING FOR:\n${jobDescription}\n\nCANDIDATE CV:\n${cv}\n\nWhat is your honest reaction? Would you advance this candidate?`,
       maxTokens: 400,
     })
@@ -105,10 +119,10 @@ Respond in first person. 3-5 sentences. Always mention at least one concrete pos
     const { text: structured } = await generateText({
       model: groq('llama-3.1-8b-instant'),
       system: 'Extract structured data from a hiring manager reaction. Return only valid JSON, no markdown.',
-      prompt: `From this hiring manager reaction, extract:
+      prompt: `From this reaction extract:
 1. wouldAdvance: true/false
-2. concerns: 2-3 specific concerns raised (empty array if they would advance enthusiastically)
-3. positives: 2-3 specific positives mentioned
+2. concerns: 2-3 specific concerns (empty array if advancing enthusiastically)
+3. positives: 2-3 specific positives
 
 Reaction: "${rawReaction}"
 
@@ -153,7 +167,7 @@ export async function synthesizeResults(
 
   const { text } = await generateText({
     model: groq('llama-3.3-70b-versatile'),
-    system: 'You are a senior career coach and recruiter with 15 years of experience. Return only valid JSON, no markdown.',
+    system: 'You are a senior career coach and recruiter with 15 years of experience across multiple industries. Return only valid JSON, no markdown.',
     prompt: `Synthesize ${successful.length} hiring manager reactions to this CV.
 
 TARGET ROLE: ${jobDescription.slice(0, 300)}
@@ -170,10 +184,16 @@ ${cv.slice(0, 1500)}
 
 Return JSON only:
 {
-  "topStrengths": ["3 concrete strengths from the CV that impressed managers"],
-  "topConcerns": ["3 recurring concerns — be specific, not generic"],
-  "keyChanges": ["3 highest-impact changes to increase the advance rate — concrete, not vague"],
-  "suggestedRoles": ["5 specific job titles this candidate is genuinely well-suited for based on their actual experience and skills — be realistic and encouraging"],
+  "topStrengths": ["3 concrete strengths from this specific CV"],
+  "topConcerns": ["3 recurring concerns — specific to what this CV shows or lacks"],
+  "keyChanges": ["3 highest-impact changes to increase the advance rate — concrete and actionable"],
+  "suggestedRoles": [
+    {
+      "role": "Specific job title",
+      "fit": 85,
+      "reason": "One sentence explaining why this candidate fits this role based on their actual experience"
+    }
+  ],
   "cvAdjustments": [
     {"section": "e.g. Work Experience", "action": "Specific thing to add, rewrite, or remove"},
     {"section": "...", "action": "..."},
@@ -181,10 +201,12 @@ Return JSON only:
     {"section": "...", "action": "..."},
     {"section": "...", "action": "..."}
   ],
-  "verdict": "2-3 honest sentences about this CV for this role. If advance rate is low, explain why and what the real gap is.",
+  "verdict": "2-3 honest sentences. If advance rate is low, explain the real gap.",
   "oneLiner": "One sentence a recruiter would say to describe this candidate"
-}`,
-    maxTokens: 900,
+}
+
+For suggestedRoles: generate 5 specific job titles this candidate can realistically apply to NOW based on their actual CV. Include fit score 0-100 and a concrete reason. Be encouraging but realistic.`,
+    maxTokens: 1000,
   })
 
   const sentimentBreakdown = {
@@ -209,13 +231,9 @@ Return JSON only:
     }
   } catch {
     return {
-      advanceRate,
-      sentimentBreakdown,
-      topStrengths: [],
-      topConcerns: [],
-      keyChanges: [],
-      suggestedRoles: [],
-      cvAdjustments: [],
+      advanceRate, sentimentBreakdown,
+      topStrengths: [], topConcerns: [], keyChanges: [],
+      suggestedRoles: [], cvAdjustments: [],
       verdict: `${advanceRate}% of hiring managers would advance this candidate.`,
       oneLiner: 'A candidate with relevant experience.',
     }
