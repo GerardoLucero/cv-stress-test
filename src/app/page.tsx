@@ -22,13 +22,19 @@ interface ManagerReaction {
   error?: string
 }
 
+interface SuggestedRole {
+  role: string
+  fit: number
+  reason: string
+}
+
 interface AnalysisResult {
   advanceRate: number
   sentimentBreakdown: { strong_yes: number; lean_yes: number; lean_no: number; strong_no: number }
   topStrengths: string[]
   topConcerns: string[]
   keyChanges: string[]
-  suggestedRoles: string[]
+  suggestedRoles: SuggestedRole[]
   cvAdjustments: Array<{ section: string; action: string }>
   verdict: string
   oneLiner: string
@@ -39,6 +45,18 @@ interface ApiResponse {
   reactions: ManagerReaction[]
   totalTokens: number
   durationMs: number
+}
+
+function FitBar({ fit }: { fit: number }) {
+  const color = fit >= 75 ? 'var(--green)' : fit >= 50 ? 'var(--primary-light)' : 'var(--accent)'
+  return (
+    <div className="fit-bar-wrap">
+      <div className="fit-bar-bg">
+        <div className="fit-bar-fill" style={{ width: `${fit}%`, background: color }} />
+      </div>
+      <span className="fit-pct" style={{ color }}>{fit}%</span>
+    </div>
+  )
 }
 
 export default function Home() {
@@ -116,10 +134,7 @@ export default function Home() {
             <div className="form-footer">
               <div className="n-selector">
                 <label>Reviewers: <strong>{n}</strong></label>
-                <input
-                  type="range" min={3} max={10} value={n}
-                  onChange={e => setN(Number(e.target.value))}
-                />
+                <input type="range" min={3} max={10} value={n} onChange={e => setN(Number(e.target.value))} />
                 <span className="n-hint">3 = fast · 10 = thorough</span>
               </div>
               <button type="submit" className="btn btn-primary" disabled={loading}>
@@ -134,7 +149,7 @@ export default function Home() {
         <div className="container loading-section">
           <div className="card loading-card">
             <div className="spinner" />
-            <span>Simulating <strong>{n} hiring managers</strong>… takes ~{n * 4}s</span>
+            <span>Simulating <strong>{n} industry-specific hiring managers</strong>… ~{n * 4}s</span>
           </div>
         </div>
       )}
@@ -148,7 +163,7 @@ export default function Home() {
       {data && (
         <section className="container results">
 
-          {/* Summary row */}
+          {/* Advance rate + verdict */}
           <div className="summary-grid">
             <div className="card advance-card">
               <div className="advance-rate">
@@ -166,19 +181,27 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Suggested roles */}
+          {/* Suggested roles with fit score */}
           {data.result.suggestedRoles.length > 0 && (
             <div className="card roles-card">
-              <h3 className="section-title">⬡ Roles you’re well-suited for</h3>
+              <h3 className="section-title">⬡ Roles you can apply to now</h3>
               <div className="roles-list">
-                {data.result.suggestedRoles.map((role, i) => (
-                  <span key={i} className="role-badge">{role}</span>
-                ))}
+                {data.result.suggestedRoles
+                  .sort((a, b) => b.fit - a.fit)
+                  .map((r, i) => (
+                    <div key={i} className="role-item">
+                      <div className="role-header">
+                        <span className="role-name">{r.role}</span>
+                        <FitBar fit={r.fit} />
+                      </div>
+                      <p className="role-reason">{r.reason}</p>
+                    </div>
+                  ))}
               </div>
             </div>
           )}
 
-          {/* Insights grid */}
+          {/* Insights */}
           <div className="insights-grid">
             <div className="card">
               <h3 className="section-title insights-title strengths">✓ Strengths</h3>
@@ -215,7 +238,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* Hiring manager reactions */}
+          {/* Reactions */}
           <h2 className="section-title reactions-title">Hiring Manager Reactions</h2>
           <div className="reactions-grid">
             {visible.map(r => (
@@ -232,16 +255,12 @@ export default function Home() {
                 <p className="reaction-text">{r.reaction}</p>
                 {r.positives.length > 0 && (
                   <div className="reaction-tags">
-                    {r.positives.map((p, i) => (
-                      <span key={i} className="badge positive-tag">{p}</span>
-                    ))}
+                    {r.positives.map((p, i) => <span key={i} className="badge positive-tag">{p}</span>)}
                   </div>
                 )}
                 {r.concerns.length > 0 && (
                   <div className="reaction-tags" style={{ marginTop: '0.4rem' }}>
-                    {r.concerns.map((c, i) => (
-                      <span key={i} className="badge concern-tag">{c}</span>
-                    ))}
+                    {r.concerns.map((c, i) => <span key={i} className="badge concern-tag">{c}</span>)}
                   </div>
                 )}
               </div>
@@ -249,9 +268,7 @@ export default function Home() {
           </div>
 
           <div className="footer-meta">
-            <span className="badge">
-              {visible.length} managers · {data.totalTokens.toLocaleString()} tokens · {(data.durationMs / 1000).toFixed(1)}s
-            </span>
+            <span className="badge">{visible.length} managers · {data.totalTokens.toLocaleString()} tokens · {(data.durationMs / 1000).toFixed(1)}s</span>
             <span className="badge badge-accent">Powered by Groq + LLaMA 3</span>
           </div>
         </section>
