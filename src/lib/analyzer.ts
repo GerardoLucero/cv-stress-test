@@ -59,29 +59,28 @@ export async function generateManagers(n: number, role: string): Promise<HiringM
     system: 'You are a persona generation engine. Return only valid JSON arrays, no markdown.',
     prompt: `Generate exactly ${n} distinct hiring managers who would realistically evaluate a candidate for: "${role}"
 
-CRITICAL: The managers must be specific to the industry and function of this role.
-- If the role is in marketing → generate marketing directors, CMOs, brand managers, growth leads
-- If the role is in engineering → generate engineering managers, CTOs, tech leads, VPs of Engineering
-- If the role is in data/AI → generate data science leads, ML platform managers, analytics directors
-- If the role is in design → generate design directors, product design managers, creative directors
-- If the role is in finance → generate CFOs, finance directors, controllers, VP Finance
-- If the role is in sales → generate sales directors, VPs of Sales, revenue managers
-- If the role is in product → generate CPOs, product directors, senior PMs, heads of product
-- Match manager seniority to the seniority implied in the role
-- Mix company sizes: startups, scale-ups, enterprise, agencies
+CRITICAL: Match managers to the industry and function of the role.
+- Marketing role → CMOs, brand managers, growth leads, marketing directors
+- Engineering role → engineering managers, CTOs, tech leads, VPs Engineering
+- Data/AI role → data science leads, ML platform managers, analytics directors
+- Design role → design directors, product design managers, creative directors
+- Finance role → CFOs, finance directors, controllers, VP Finance
+- Sales role → sales directors, VPs of Sales, revenue managers
+- Product role → CPOs, product directors, heads of product
+
+Balance:
+- ${positiveCount} managers: growth-minded, value potential and trajectory
+- Rest: traditional, value exact experience match and track record
+- Mix company sizes: startups, scale-ups, enterprise
 - International name diversity
 
-Balance (strictly follow):
-- ${positiveCount} managers should be growth-minded: value potential, trajectory, coachability
-- The rest should be traditional: value exact experience match and proven track record
-
-Return JSON array of exactly ${n} objects (no markdown):
+Return JSON array of exactly ${n} objects:
 [{
   "name": "Full Name",
-  "role": "Specific title at specific company type",
+  "role": "Specific title at company type",
   "company": "Industry and stage",
   "yearsHiring": 6,
-  "bias": "One sentence — their specific evaluation lens for this type of role"
+  "bias": "One sentence evaluation lens"
 }]`,
     maxTokens: 2000,
   })
@@ -95,12 +94,13 @@ Return JSON array of exactly ${n} objects (no markdown):
       role: 'Director of Talent',
       company: 'Tech company',
       yearsHiring: 5,
-      bias: 'Evaluates candidates based on impact, growth potential, and culture fit',
+      bias: 'Evaluates candidates based on impact and growth potential',
     }))
   }
 }
 
-// ─── Step 2: Run a single manager’s evaluation ────────────────────────────
+// ─── Step 2: Single-call evaluation per manager ───────────────────────────
+// One LLM call returns reaction + structured data together (halves token usage)
 
 export async function runManager(
   manager: HiringManagerProfile,
@@ -111,52 +111,50 @@ export async function runManager(
   const start = Date.now()
 
   try {
-    const { text: rawReaction, usage } = await generateText({
+    const { text, usage } = await generateText({
       model: groq('llama-3.1-8b-instant'),
       system: `You are ${manager.name}, ${manager.role} at ${manager.company}.
 You have been hiring for ${manager.yearsHiring} years in this industry.
 Your evaluation lens: ${manager.bias}
 
-Review the CV for this specific role. Be direct — reference actual things you see.
-Respond in first person. 3-5 sentences. Always mention at least one concrete positive.`,
-      prompt: `ROLE WE ARE HIRING FOR:\n${jobDescription}\n\nCANDIDATE CV:\n${cv}\n\nWhat is your honest reaction? Would you advance this candidate?`,
-      maxTokens: 400,
+Review this CV for the specific role. Be direct — reference actual things you see in the CV.
+Your reaction must be 3-5 sentences in first person. Always mention at least one concrete positive.
+Return ONLY a valid JSON object, no markdown, no extra text.`,
+      prompt: `ROLE: ${jobDescription}\n\nCV: ${cv}\n\nReturn JSON only:
+{"reaction": "3-5 sentence honest reaction", "wouldAdvance": true, "concerns": ["specific concern 1", "specific concern 2"], "positives": ["specific positive 1", "specific positive 2"]}`,
+      maxTokens: 500,
     })
 
     const tokens = (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0)
 
-    const { text: structured } = await generateText({
-      model: groq('llama-3.1-8b-instant'),
-      system: 'Extract structured data from a hiring manager reaction. Return only valid JSON, no markdown.',
-      prompt: `From this reaction extract:
-1. wouldAdvance: true/false
-2. concerns: 2-3 specific concerns (empty array if advancing enthusiastically)
-3. positives: 2-3 specific positives
-
-Reaction: "${rawReaction}"
-
-Return JSON only: {"wouldAdvance": true, "concerns": ["..."], "positives": ["..."]}`,
-      maxTokens: 200,
-    })
-
-    let wouldAdvance = false
-    let concerns: string[] = []
-    let positives: string[] = []
-
     try {
-      const parsed = JSON.parse(structured.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())
-      wouldAdvance = parsed.wouldAdvance ?? false
-      concerns = parsed.concerns ?? []
-      positives = parsed.positives ?? []
-    } catch { /* use defaults */ }
-
-    return { index, profile: manager, wouldAdvance, reaction: rawReaction, concerns, positives, tokens, durationMs: Date.now() - start }
+      const parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())
+      return {
+        index, profile: manager,
+        wouldAdvance: parsed.wouldAdvance ?? false,
+        reaction: parsed.reaction ?? '',
+        concerns: parsed.concerns ?? [],
+        positives: parsed.positives ?? [],
+        tokens, durationMs: Date.now() - start,
+      }
+    } catch {
+      return {
+        index, profile: manager, wouldAdvance: false,
+        reaction: text.slice(0, 600), concerns: [], positives: [],
+        tokens, durationMs: Date.now() - start,
+      }
+    }
   } catch (err) {
-    return { index, profile: manager, wouldAdvance: false, reaction: '', concerns: [], positives: [], tokens: 0, durationMs: Date.now() - start, error: String(err) }
+    return {
+      index, profile: manager, wouldAdvance: false,
+      reaction: '', concerns: [], positives: [],
+      tokens: 0, durationMs: Date.now() - start,
+      error: String(err),
+    }
   }
 }
 
-// ─── Step 3: Synthesize all reactions ─────────────────────────────────────
+// ─── Step 3: Synthesize ───────────────────────────────────────────────────
 
 export async function synthesizeResults(
   cv: string,
@@ -167,61 +165,67 @@ export async function synthesizeResults(
   const advanceCount = successful.filter(r => r.wouldAdvance).length
   const advanceRate = Math.round((advanceCount / (successful.length || 1)) * 100)
 
-  const allConcerns = successful.flatMap(r => r.concerns)
-  const allPositives = successful.flatMap(r => r.positives)
+  // Frequency maps — much cheaper than sending full reaction text
+  const concernFreq: Record<string, number> = {}
+  const positiveFreq: Record<string, number> = {}
+  successful.forEach(r => {
+    r.concerns.forEach(c => { concernFreq[c] = (concernFreq[c] ?? 0) + 1 })
+    r.positives.forEach(p => { positiveFreq[p] = (positiveFreq[p] ?? 0) + 1 })
+  })
+  const topConcernsSummary = Object.entries(concernFreq)
+    .sort((a, b) => b[1] - a[1]).slice(0, 8)
+    .map(([c, n]) => `${c} (x${n})`).join(' | ')
+  const topPositivesSummary = Object.entries(positiveFreq)
+    .sort((a, b) => b[1] - a[1]).slice(0, 8)
+    .map(([p, n]) => `${p} (x${n})`).join(' | ')
 
-  const sampleReactions = successful.slice(0, 12).map(r =>
-    `[${r.profile.role} — ${r.wouldAdvance ? 'ADVANCE' : 'PASS'}]\n${r.reaction}`
-  ).join('\n\n---\n\n')
+  // Sample reactions for qualitative context
+  const sampleReactions = successful.slice(0, 6).map(r =>
+    `[${r.profile.role} — ${r.wouldAdvance ? 'ADVANCE' : 'PASS'}] ${r.reaction}`
+  ).join('\n\n')
 
   const { text } = await generateText({
     model: groq('llama-3.3-70b-versatile'),
-    system: 'You are a senior career coach and recruiter with 15 years of experience across multiple industries. Return only valid JSON, no markdown.',
-    prompt: `Synthesize ${successful.length} hiring manager reactions to this CV.
+    system: 'You are a senior career coach with 15 years of experience. Return only valid JSON, no markdown.',
+    prompt: `Synthesize feedback from ${successful.length} hiring managers.
 
-TARGET ROLE: ${jobDescription.slice(0, 300)}
-ADVANCE RATE: ${advanceRate}% (${advanceCount} of ${successful.length} would advance)
+ROLE: ${jobDescription.slice(0, 300)}
+ADVANCE RATE: ${advanceRate}% (${advanceCount}/${successful.length})
+
+TOP CONCERNS (by frequency): ${topConcernsSummary}
+TOP POSITIVES (by frequency): ${topPositivesSummary}
 
 SAMPLE REACTIONS:
 ${sampleReactions}
 
-ALL CONCERNS: ${allConcerns.join(' | ')}
-ALL POSITIVES: ${allPositives.join(' | ')}
-
-FULL CV:
-${cv.slice(0, 1500)}
+CV SUMMARY:
+${cv.slice(0, 1000)}
 
 Return JSON only:
 {
   "topStrengths": ["3 concrete strengths from this specific CV"],
-  "topConcerns": ["3 recurring concerns — specific to what this CV shows or lacks"],
-  "keyChanges": ["3 highest-impact changes to increase the advance rate"],
+  "topConcerns": ["3 most frequent concerns — specific"],
+  "keyChanges": ["3 highest-impact concrete changes"],
   "suggestedRoles": [
-    { "role": "Specific job title", "fit": 85, "reason": "Why this candidate fits based on their actual experience" }
+    { "role": "Specific job title", "fit": 85, "reason": "Why based on their actual experience" }
   ],
   "cvAdjustments": [
-    { "section": "e.g. Work Experience", "action": "Specific thing to add, rewrite, or remove" },
-    { "section": "...", "action": "..." },
-    { "section": "...", "action": "..." },
-    { "section": "...", "action": "..." },
-    { "section": "...", "action": "..." }
+    { "section": "Work Experience", "action": "Specific action" },
+    { "section": "Skills", "action": "Specific action" },
+    { "section": "Summary", "action": "Specific action" },
+    { "section": "Achievements", "action": "Specific action" },
+    { "section": "Format", "action": "Specific action" }
   ],
   "courseRecommendations": [
-    {
-      "skill": "The specific skill gap this course addresses",
-      "platform": "Coursera | Udemy | LinkedIn Learning | YouTube | edX | freeCodeCamp",
-      "course": "Exact course or resource name",
-      "why": "One sentence: how completing this directly improves their candidacy for the target role",
-      "priority": "high"
-    }
+    { "skill": "Gap skill", "platform": "Coursera", "course": "Exact course name", "why": "How it improves candidacy", "priority": "high" }
   ],
-  "verdict": "2-3 honest sentences. If advance rate is low, explain the real gap.",
+  "verdict": "2-3 honest sentences. Explain the real gap if advance rate is low.",
   "oneLiner": "One sentence a recruiter would say to describe this candidate"
 }
 
-For suggestedRoles: 5 specific job titles this candidate can realistically apply to NOW. Include fit score 0-100.
-For courseRecommendations: 4-5 courses targeting the exact gaps identified. Match platform to the type of skill (technical → Coursera/Udemy, soft skills → LinkedIn Learning, etc). priority: high = blocks advancement, medium = would help, low = nice to have.`,
-    maxTokens: 1200,
+For suggestedRoles: 5 roles this candidate can apply to NOW. Include fit 0-100.
+For courseRecommendations: 4 courses targeting exact gaps. priority: high/medium/low.`,
+    maxTokens: 1000,
   })
 
   const sentimentBreakdown = {
