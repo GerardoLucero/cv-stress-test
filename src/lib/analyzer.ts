@@ -1,5 +1,7 @@
-import { anthropic } from '@ai-sdk/anthropic'
+import { createGroq } from '@ai-sdk/groq'
 import { generateText } from 'ai'
+
+const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
 
 export interface HiringManagerProfile {
   name: string
@@ -35,7 +37,7 @@ export interface AnalysisResult {
 
 export async function generateManagers(n: number, role: string): Promise<HiringManagerProfile[]> {
   const { text } = await generateText({
-    model: anthropic('claude-haiku-4.5'),
+    model: groq('llama-3.1-8b-instant'),
     system: 'You are a persona generation engine. Return only valid JSON arrays, no markdown.',
     prompt: `Generate exactly ${n} distinct hiring managers who would evaluate a candidate for this role: "${role}"
 
@@ -83,7 +85,7 @@ export async function runManager(
 
   try {
     const { text: rawReaction, usage } = await generateText({
-      model: anthropic('claude-haiku-4.5'),
+      model: groq('llama-3.1-8b-instant'),
       system: `You are ${manager.name}, ${manager.role} at ${manager.company}.
 You have been hiring engineers for ${manager.yearsHiring} years.
 Your evaluation lens: ${manager.bias}
@@ -97,7 +99,7 @@ Respond in first person. 3-5 sentences. Do not be generic. Name specific things 
     const tokens = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
 
     const { text: structured } = await generateText({
-      model: anthropic('claude-haiku-4.5'),
+      model: groq('llama-3.1-8b-instant'),
       system: 'Extract structured data from a hiring manager reaction. Return only valid JSON, no markdown.',
       prompt: `From this hiring manager reaction, extract:
 1. wouldAdvance: true/false — would they move this candidate forward?
@@ -146,7 +148,7 @@ export async function synthesizeResults(
   ).join('\n\n---\n\n')
 
   const { text } = await generateText({
-    model: anthropic('claude-sonnet-4.6'),
+    model: groq('llama-3.3-70b-versatile'),
     system: 'You are a senior career coach synthesizing hiring manager feedback. Return only valid JSON, no markdown.',
     prompt: `Synthesize ${successful.length} hiring manager reactions to this CV.
 
