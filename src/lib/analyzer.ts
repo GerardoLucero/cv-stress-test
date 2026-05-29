@@ -2,8 +2,8 @@ import { createGroq } from '@ai-sdk/groq'
 import { generateText } from 'ai'
 
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
-// llama3-8b-8192: 30K TPM free vs 6K TPM of llama-3.1-8b-instant
-const MODEL = 'llama3-8b-8192'
+// llama-3.3-70b-versatile: 12K TPM free (only model above 6K on Groq free tier)
+const MODEL = 'llama-3.3-70b-versatile'
 
 export interface HiringManagerProfile {
   name: string

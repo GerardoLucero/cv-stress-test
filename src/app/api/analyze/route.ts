@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'cv and jobDescription are required' }, { status: 400 })
   }
 
-  const n = Math.min(Math.max(body.n ?? 5, 3), 10)
+  const n = Math.min(Math.max(body.n ?? 5, 3), 7)
   const start = Date.now()
 
   try {
