@@ -10,7 +10,7 @@ async function runConcurrent(
   cv: string,
   jobDescription: string,
   chunkSize = 3,
-  delayMs = 700
+  delayMs = 2000
 ): Promise<PromiseSettledResult<ManagerReaction>[]> {
   const results: PromiseSettledResult<ManagerReaction>[] = []
   for (let i = 0; i < managers.length; i += chunkSize) {
