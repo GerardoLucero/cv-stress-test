@@ -92,7 +92,7 @@ export default function Home() {
         <div className="container">
           <div className="hero-tag">
             <span className="badge badge-accent">⬡ AI-Powered</span>
-            <span className="badge">Groq · LLaMA 3</span>
+            <span className="badge">Groq · LLaMA 3.3 70B</span>
             <span className="badge">Free & Open Source</span>
           </div>
           <h1>CV <span className="gradient-text">Stress Test</span></h1>
