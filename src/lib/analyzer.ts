@@ -2,6 +2,8 @@ import { createGroq } from '@ai-sdk/groq'
 import { generateText } from 'ai'
 
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
+// llama3-8b-8192: 30K TPM free vs 6K TPM of llama-3.1-8b-instant
+const MODEL = 'llama3-8b-8192'
 
 export interface HiringManagerProfile {
   name: string
@@ -55,7 +57,7 @@ export interface AnalysisResult {
 export async function generateManagers(n: number, role: string): Promise<HiringManagerProfile[]> {
   const positiveCount = Math.round(n * 0.45)
   const { text } = await generateText({
-    model: groq('llama-3.1-8b-instant'),
+    model: groq(MODEL),
     system: 'You are a persona generation engine. Return only valid JSON arrays, no markdown.',
     prompt: `Generate exactly ${n} distinct hiring managers who would realistically evaluate a candidate for: "${role}"
 
@@ -82,7 +84,7 @@ Return JSON array of exactly ${n} objects:
   "yearsHiring": 6,
   "bias": "One sentence evaluation lens"
 }]`,
-    maxTokens: 2000,
+    maxTokens: 900,
   })
 
   try {
@@ -112,7 +114,7 @@ export async function runManager(
 
   try {
     const { text, usage } = await generateText({
-      model: groq('llama-3.1-8b-instant'),
+      model: groq(MODEL),
       system: `You are ${manager.name}, ${manager.role} at ${manager.company}.
 You have been hiring for ${manager.yearsHiring} years in this industry.
 Your evaluation lens: ${manager.bias}
@@ -185,7 +187,7 @@ export async function synthesizeResults(
   ).join('\n\n')
 
   const { text } = await generateText({
-    model: groq('llama-3.1-8b-instant'),
+    model: groq(MODEL),
     system: 'You are a senior career coach with 15 years of experience. Return only valid JSON, no markdown.',
     prompt: `Synthesize feedback from ${successful.length} hiring managers.
 
