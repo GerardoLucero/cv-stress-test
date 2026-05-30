@@ -120,8 +120,9 @@ export async function POST(request: Request) {
         const successful = reactions.filter(r => !r.error && r.reaction)
         const failRate = reactions.length > 0
           ? (reactions.length - successful.length) / reactions.length : 0
+        const firstError = reactions.find(r => r.error)?.error ?? ''
         const warning = failRate > 0.4
-          ? `High demand — ${reactions.length - successful.length} of ${reactions.length} managers timed out. Try again in 30s.`
+          ? `${reactions.length - successful.length}/${reactions.length} managers failed. Error: ${firstError.slice(0, 200)}`
           : undefined
 
         const result = await synthesizeResults(cv, jobDescription, successful)
