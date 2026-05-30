@@ -1,14 +1,78 @@
 import { createGroq } from '@ai-sdk/groq'
-import { generateText, tool, stepCountIs } from 'ai'
+import { generateText, Output } from 'ai'
 import { z } from 'zod'
 import { generateManagers, runManager, synthesizeResults } from '@/lib/analyzer'
-import type { ManagerReaction, HiringManagerProfile } from '@/lib/analyzer'
+import type { ManagerReaction } from '@/lib/analyzer'
 
 export const maxDuration = 120
 
 // Groq free tier — no credit card required. Get key at console.groq.com
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
 const MODEL = 'llama-3.3-70b-versatile'
+
+// ─── Pre-flight agent decision ────────────────────────────────────────────────
+// One lightweight LLM call validates inputs AND extracts role/industry.
+// This IS the "agent decides" step — if invalid, we skip all N manager calls.
+// Costs ~300 tokens. Prevents wasting the full budget on garbage inputs.
+
+const ValidationSchema = z.object({
+  isValid: z.boolean(),
+  role: z.string().describe('Job role detected from the JD'),
+  industry: z.string().describe('Industry detected from the JD'),
+  reason: z.string().optional().describe('If invalid, why'),
+})
+
+async function validateAndExtract(cv: string, jd: string): Promise<{
+  isValid: boolean; role: string; industry: string; reason?: string
+}> {
+  try {
+    const { output } = await generateText({
+      model: groq(MODEL),
+      output: Output.object({ schema: ValidationSchema }),
+      system: 'You are a pre-flight validator. Be permissive — only reject completely empty or nonsensical inputs.',
+      prompt: `Validate these inputs and extract role/industry.
+
+CV (first 400 chars): ${cv.slice(0, 400)}
+JD (first 200 chars): ${jd.slice(0, 200)}
+
+isValid: false ONLY if CV is empty/lorem ipsum OR JD is not a job description.
+Real CVs with any work experience → isValid: true.`,
+      maxOutputTokens: 150,
+    })
+    return output
+  } catch {
+    // On validation failure, proceed optimistically rather than blocking
+    return { isValid: true, role: 'Professional', industry: 'General' }
+  }
+}
+
+// ─── Staggered parallel evaluation ───────────────────────────────────────────
+// Managers start 600ms apart to stay within Groq 12K TPM free tier.
+// Still streams results progressively as each manager completes.
+
+async function runStaggered(
+  managers: Parameters<typeof runManager>[0][],
+  cv: string,
+  jd: string,
+  onProgress: (reaction: ManagerReaction, done: number, total: number) => void
+): Promise<ManagerReaction[]> {
+  const reactions: ManagerReaction[] = []
+  let done = 0
+
+  await Promise.allSettled(
+    managers.map((m, i) =>
+      new Promise<void>(resolve => setTimeout(resolve, i * 600))
+        .then(() => runManager(m, i, cv, jd))
+        .then(reaction => {
+          reactions.push(reaction)
+          done++
+          onProgress(reaction, done, managers.length)
+        })
+    )
+  )
+
+  return reactions
+}
 
 export async function POST(request: Request) {
   const body = await request.json() as { cv: string; jobDescription: string; n?: number }
@@ -24,14 +88,6 @@ export async function POST(request: Request) {
   const n = Math.min(Math.max(body.n ?? 5, 3), 7)
   const start = Date.now()
   const encoder = new TextEncoder()
-
-  // Shared state — tools mutate this as the agent progresses
-  const state = {
-    managers: [] as HiringManagerProfile[],
-    reactions: [] as ManagerReaction[],
-    progressDone: 0,
-  }
-
   let controllerClosed = false
 
   const stream = new ReadableStream({
@@ -41,105 +97,42 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
       }
       const close = () => {
-        if (!controllerClosed) {
-          controllerClosed = true
-          controller.close()
-        }
+        if (!controllerClosed) { controllerClosed = true; controller.close() }
       }
 
       try {
-        // Agent orchestrator — decides validate → generate → evaluate → synthesize
-        await generateText({
-          model: groq(MODEL),
-          stopWhen: stepCountIs(8),
-          system: `You are a CV evaluation orchestrator. Follow this exact sequence using the tools:
-1. validate_inputs — always call this first to check if inputs are real content
-2. If valid: call generate_managers to create evaluator personas
-3. Call run_evaluations to evaluate the CV in parallel
-4. Call synthesize to generate the final report
-Do not skip steps. Call each tool exactly once.`,
-          prompt: `N managers requested: ${n}
-JD preview: ${jobDescription.slice(0, 300)}
-CV preview: ${cv.slice(0, 300)}`,
-          tools: {
-            validate_inputs: tool({
-              description: 'Validate that the CV and JD contain real content worth evaluating. Call this first.',
-              inputSchema: z.object({
-                is_valid: z.boolean().describe('True if CV has real work experience and JD describes a real role'),
-                reason: z.string().optional().describe('If invalid, explain why (empty, lorem ipsum, not a real CV/JD)'),
-              }),
-              execute: async ({ is_valid, reason }) => {
-                if (!is_valid) {
-                  emit({ type: 'error', error: reason ?? 'CV or job description does not contain valid content' })
-                  close()
-                  return { ok: false }
-                }
-                return { ok: true }
-              },
-            }),
+        // ── Agent decision: validate inputs before spending tokens ────────────
+        const validation = await validateAndExtract(cv, jobDescription)
+        if (!validation.isValid) {
+          emit({ type: 'error', error: validation.reason ?? 'Please provide a real CV and job description.' })
+          return close()
+        }
 
-            generate_managers: tool({
-              description: 'Generate N hiring manager personas matched to the role and industry.',
-              inputSchema: z.object({
-                n: z.number().describe('Number of managers to generate'),
-                role: z.string().describe('Job role detected from the JD'),
-              }),
-              execute: async ({ n: managerN, role }) => {
-                state.managers = await generateManagers(managerN, role)
-                return { count: state.managers.length }
-              },
-            }),
+        // ── Generate personas using role detected by the agent ────────────────
+        const managers = await generateManagers(n, validation.role || jobDescription.slice(0, 300))
 
-            run_evaluations: tool({
-              description: 'Run CV evaluations in parallel across all managers. Emits SSE progress events as each manager completes.',
-              inputSchema: z.object({}),
-              execute: async () => {
-                const total = state.managers.length
-                await Promise.allSettled(
-                  state.managers.map((m, i) =>
-                    runManager(m, i, cv, jobDescription).then(reaction => {
-                      state.reactions.push(reaction)
-                      state.progressDone++
-                      emit({ type: 'progress', done: state.progressDone, total, manager: reaction })
-                    })
-                  )
-                )
-                const successful = state.reactions.filter(r => !r.error && r.reaction).length
-                return { total, successful }
-              },
-            }),
+        // ── Staggered evaluation — emits SSE progress as each manager finishes ─
+        const reactions = await runStaggered(managers, cv, jobDescription,
+          (reaction, done, total) => emit({ type: 'progress', done, total, manager: reaction })
+        )
 
-            synthesize: tool({
-              description: 'Synthesize all reactions into final analysis and emit the complete event.',
-              inputSchema: z.object({}),
-              execute: async () => {
-                const successful = state.reactions.filter(r => !r.error && r.reaction)
-                const failRate = state.reactions.length > 0
-                  ? (state.reactions.length - successful.length) / state.reactions.length
-                  : 0
-                const warning = failRate > 0.4
-                  ? `High demand — ${state.reactions.length - successful.length} of ${state.reactions.length} managers timed out. Try again in 30s.`
-                  : undefined
+        // ── Synthesize ───────────────────────────────────────────────────────
+        const successful = reactions.filter(r => !r.error && r.reaction)
+        const failRate = reactions.length > 0
+          ? (reactions.length - successful.length) / reactions.length : 0
+        const warning = failRate > 0.4
+          ? `High demand — ${reactions.length - successful.length} of ${reactions.length} managers timed out. Try again in 30s.`
+          : undefined
 
-                const result = await synthesizeResults(cv, jobDescription, successful)
-                const totalTokens = state.reactions.reduce((s, r) => s + (r?.tokens ?? 0), 0)
+        const result = await synthesizeResults(cv, jobDescription, successful)
+        const totalTokens = reactions.reduce((s, r) => s + (r?.tokens ?? 0), 0)
 
-                emit({ type: 'complete', result, reactions: state.reactions, totalTokens, durationMs: Date.now() - start, warning })
-                close()
-                return { done: true }
-              },
-            }),
-          },
-        })
-
+        emit({ type: 'complete', result, reactions, totalTokens, durationMs: Date.now() - start, warning })
         close()
       } catch (err) {
-        console.error('[analyze] agent error', { error: String(err), n, durationMs: Date.now() - start })
-        try {
-          emit({ type: 'error', error: String(err) })
-        } finally {
-          close()
-        }
+        console.error('[analyze] error', { error: String(err), n, durationMs: Date.now() - start })
+        emit({ type: 'error', error: String(err) })
+        close()
       }
     },
   })
