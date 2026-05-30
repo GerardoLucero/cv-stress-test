@@ -8,7 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@ai-sdk/groq": "^1.0.0",
+    "@ai-sdk/groq": "^3.0.39",
     "ai": "^6.0.193",
     "next": "^15.0.0",
     "react": "^19.0.0",
