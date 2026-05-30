@@ -1,3 +1,4 @@
+import { createGroq } from '@ai-sdk/groq'
 import { generateText, tool, stepCountIs } from 'ai'
 import { z } from 'zod'
 import { generateManagers, runManager, synthesizeResults } from '@/lib/analyzer'
@@ -5,9 +6,9 @@ import type { ManagerReaction, HiringManagerProfile } from '@/lib/analyzer'
 
 export const maxDuration = 120
 
-// AI Gateway model — routes automatically in production via VERCEL_OIDC_TOKEN (no rotation needed).
-// Local dev: run `vercel env pull` once. Fallback: set AI_GATEWAY_API_KEY (requires manual rotation).
-const MODEL = 'meta/llama-3.3-70b'
+// Groq free tier — no credit card required. Get key at console.groq.com
+const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
+const MODEL = 'llama-3.3-70b-versatile'
 
 export async function POST(request: Request) {
   const body = await request.json() as { cv: string; jobDescription: string; n?: number }
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       try {
         // Agent orchestrator — decides validate → generate → evaluate → synthesize
         await generateText({
-          model: MODEL,
+          model: groq(MODEL),
           stopWhen: stepCountIs(8),
           system: `You are a CV evaluation orchestrator. Follow this exact sequence using the tools:
 1. validate_inputs — always call this first to check if inputs are real content

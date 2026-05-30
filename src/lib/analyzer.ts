@@ -1,11 +1,12 @@
+import { createGroq } from '@ai-sdk/groq'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
-// AI Gateway routes this string automatically — no provider setup needed
-// Vercel OIDC token is auto-provisioned on deployment (vercel env pull for local dev)
-const MODEL = 'meta/llama-3.3-70b'
+// Groq free tier: no credit card required, 12K TPM on llama-3.3-70b-versatile
+const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
+const MODEL = 'llama-3.3-70b-versatile'
 
-// ─── Token budget — monitor via AI Gateway dashboard ─────────────────────────
+// ─── Token budget — Groq free tier: 12K TPM ──────────────────────────────────
 // Each manager call: ~550 prompt + 450 completion ≈ 1000 tokens
 // N=5 parallel ≈ 5000 tokens
 // Synthesis: ~1500 prompt + 900 completion ≈ 2400 tokens
@@ -110,7 +111,7 @@ export async function generateManagers(n: number, role: string): Promise<HiringM
   const positiveCount = Math.round(n * 0.45)
   try {
     const { output } = await generateText({
-      model: MODEL,
+      model: groq(MODEL),
       output: Output.object({
         schema: z.object({ managers: z.array(HiringManagerSchema) }),
       }),
@@ -156,7 +157,7 @@ export async function runManager(
 
   try {
     const { output, usage } = await generateText({
-      model: MODEL,
+      model: groq(MODEL),
       output: Output.object({ schema: ManagerReactionSchema }),
       system: `You are ${manager.name}, ${manager.role} at ${manager.company}.
 ${manager.yearsHiring} years hiring. Lens: ${manager.bias}
@@ -224,7 +225,7 @@ export async function synthesizeResults(
 
   try {
     const { output } = await generateText({
-      model: MODEL,
+      model: groq(MODEL),
       output: Output.object({ schema: AnalysisResultSchema }),
       system: 'You are a senior career coach with 15 years of experience.',
       prompt: `Synthesize feedback from ${successful.length} hiring managers.
