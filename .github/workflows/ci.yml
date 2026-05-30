@@ -43,8 +43,17 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
 
-      - name: Deploy to Vercel (production)
-        run: vercel --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
+      - name: Push env vars to Vercel project
         env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: echo "$GROQ_API_KEY" | vercel env add GROQ_API_KEY production --token "$VERCEL_TOKEN" --force --yes 2>/dev/null || true
+
+      - name: Deploy to Vercel (production)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel --prod --token "$VERCEL_TOKEN" --yes
