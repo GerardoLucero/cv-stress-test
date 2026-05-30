@@ -43,22 +43,36 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
 
-      - name: Push GROQ_API_KEY to Vercel (upsert via REST API)
+      - name: Upsert GROQ_API_KEY in Vercel (GET id → PATCH or POST)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          # Delete existing key first (ignore errors if not found)
-          curl -s -X DELETE \
-            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env/GROQ_API_KEY?target=production" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" || true
-          # Create fresh
-          curl -sf -X POST \
-            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env" \
+          # Find existing env var ID for GROQ_API_KEY in production
+          ENV_ID=$(curl -s \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env" \
             -H "Authorization: Bearer $VERCEL_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"key\":\"GROQ_API_KEY\",\"value\":\"$GROQ_API_KEY\",\"type\":\"encrypted\",\"target\":[\"production\"]}"
+            | jq -r '.envs[] | select(.key=="GROQ_API_KEY" and (.target // [] | contains(["production"]))) | .id' \
+            | head -1)
+
+          if [ -n "$ENV_ID" ] && [ "$ENV_ID" != "null" ]; then
+            echo "Updating existing env var (id: $ENV_ID)"
+            curl -s -X PATCH \
+              "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env/$ENV_ID" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"value\":\"$GROQ_API_KEY\",\"type\":\"encrypted\",\"target\":[\"production\"]}" \
+              | jq '{key: .key, target: .target}'
+          else
+            echo "Creating new env var"
+            curl -s -X POST \
+              "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"key\":\"GROQ_API_KEY\",\"value\":\"$GROQ_API_KEY\",\"type\":\"encrypted\",\"target\":[\"production\"]}" \
+              | jq '{key: .key, target: .target}'
+          fi
 
       - name: Deploy to Vercel (production)
         env:
