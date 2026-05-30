@@ -9,10 +9,11 @@
   },
   "dependencies": {
     "@ai-sdk/groq": "^1.0.0",
-    "ai": "^4.0.0",
+    "ai": "^6.0.193",
     "next": "^15.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
