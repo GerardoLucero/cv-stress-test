@@ -138,7 +138,7 @@ export default function Home() {
         <div className="container">
           <div className="hero-tag">
             <span className="badge badge-accent">⬡ AI-Powered</span>
-            <span className="badge">Vercel AI Gateway · LLaMA 3.3 70B</span>
+            <span className="badge">Groq · LLaMA 3.3 70B</span>
             <span className="badge">Free & Open Source</span>
           </div>
           <h1>CV <span className="gradient-text">Stress Test</span></h1>
@@ -369,7 +369,7 @@ export default function Home() {
 
               <div className="footer-meta no-print">
                 <span className="badge">{streamedManagers.length} managers · {totalTokens.toLocaleString()} tokens · {(durationMs / 1000).toFixed(1)}s</span>
-                <span className="badge badge-accent">Powered by Vercel AI Gateway · LLaMA 3.3 70B</span>
+                <span className="badge badge-accent">Powered by Groq · LLaMA 3.3 70B</span>
               </div>
             </>
           )}

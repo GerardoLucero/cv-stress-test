@@ -43,13 +43,22 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
 
-      - name: Push env vars to Vercel project
+      - name: Push GROQ_API_KEY to Vercel (upsert via REST API)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: echo "$GROQ_API_KEY" | vercel env add GROQ_API_KEY production --token "$VERCEL_TOKEN" --force --yes 2>/dev/null || true
+        run: |
+          # Delete existing key first (ignore errors if not found)
+          curl -s -X DELETE \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env/GROQ_API_KEY?target=production" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" || true
+          # Create fresh
+          curl -sf -X POST \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"key\":\"GROQ_API_KEY\",\"value\":\"$GROQ_API_KEY\",\"type\":\"encrypted\",\"target\":[\"production\"]}"
 
       - name: Deploy to Vercel (production)
         env:
