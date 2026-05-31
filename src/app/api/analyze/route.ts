@@ -1,5 +1,5 @@
 import { createGroq } from '@ai-sdk/groq'
-import { generateText, Output } from 'ai'
+import { generateText } from 'ai'
 import { z } from 'zod'
 import { generateManagers, runManager, synthesizeResults } from '@/lib/analyzer'
 import type { ManagerReaction } from '@/lib/analyzer'
@@ -26,22 +26,23 @@ async function validateAndExtract(cv: string, jd: string): Promise<{
   isValid: boolean; role: string; industry: string; reason?: string
 }> {
   try {
-    const { output } = await generateText({
+    const { text } = await generateText({
       model: groq(MODEL),
-      output: Output.object({ schema: ValidationSchema }),
-      system: 'You are a pre-flight validator. Be permissive — only reject completely empty or nonsensical inputs.',
+      system: 'You are a pre-flight validator. Return only valid JSON, no markdown.',
       prompt: `Validate these inputs and extract role/industry.
 
 CV (first 400 chars): ${cv.slice(0, 400)}
 JD (first 200 chars): ${jd.slice(0, 200)}
 
 isValid: false ONLY if CV is empty/lorem ipsum OR JD is not a job description.
-Real CVs with any work experience → isValid: true.`,
+Real CVs with any work experience → isValid: true.
+
+Return JSON only: {"isValid":true,"role":"Detected role","industry":"Detected industry","reason":"If invalid, why"}`,
       maxOutputTokens: 150,
     })
-    return output
+    const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    return ValidationSchema.parse(JSON.parse(clean))
   } catch {
-    // On validation failure, proceed optimistically rather than blocking
     return { isValid: true, role: 'Professional', industry: 'General' }
   }
 }
