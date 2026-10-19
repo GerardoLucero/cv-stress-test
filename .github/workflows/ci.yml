@@ -22,6 +22,9 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Unit tests
+        run: npm test
+
       - name: Build
         run: npm run build
         env:
@@ -43,36 +46,43 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
 
-      - name: Upsert GROQ_API_KEY in Vercel (GET id → PATCH or POST)
+      - name: Sync runtime env vars to Vercel (PATCH if it exists, POST if not)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          NVIDIA_MODEL: ${{ secrets.NVIDIA_MODEL }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          # Find existing env var ID for GROQ_API_KEY in production
-          ENV_ID=$(curl -s \
-            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            | jq -r '.envs[] | select(.key=="GROQ_API_KEY" and (.target // [] | contains(["production"]))) | .id' \
-            | head -1)
+          # SESSION_SECRET seals the interview sessions; the app refuses to run in production without it.
+          [ -n "$SESSION_SECRET" ] || { echo "SESSION_SECRET secret is missing"; exit 1; }
 
-          if [ -n "$ENV_ID" ] && [ "$ENV_ID" != "null" ]; then
-            echo "Updating existing env var (id: $ENV_ID)"
-            curl -s -X PATCH \
-              "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env/$ENV_ID" \
+          for KEY in GROQ_API_KEY NVIDIA_NIM_API_KEY NVIDIA_MODEL SESSION_SECRET; do
+            VALUE="${!KEY}"
+            if [ -z "$VALUE" ]; then echo "skip $KEY (not set in GitHub)"; continue; fi
+
+            ENV_ID=$(curl -s \
+              "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env" \
               -H "Authorization: Bearer $VERCEL_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"value\":\"$GROQ_API_KEY\",\"type\":\"encrypted\",\"target\":[\"production\"]}" \
-              | jq '{key: .key, target: .target}'
-          else
-            echo "Creating new env var"
-            curl -s -X POST \
-              "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env" \
-              -H "Authorization: Bearer $VERCEL_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"key\":\"GROQ_API_KEY\",\"value\":\"$GROQ_API_KEY\",\"type\":\"encrypted\",\"target\":[\"production\"]}" \
-              | jq '{key: .key, target: .target}'
-          fi
+              | jq -r --arg k "$KEY" '.envs[] | select(.key==$k and (.target // [] | contains(["production"]))) | .id' \
+              | head -1)
+
+            # jq builds the JSON so a value with quotes or backslashes cannot break the payload.
+            BODY=$(jq -n --arg k "$KEY" --arg v "$VALUE" '{key:$k,value:$v,type:"encrypted",target:["production"]}')
+
+            if [ -n "$ENV_ID" ] && [ "$ENV_ID" != "null" ]; then
+              echo "Updating $KEY (id: $ENV_ID)"
+              curl -s -X PATCH "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env/$ENV_ID" \
+                -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+                -d "$BODY" | jq '{key: .key, target: .target}'
+            else
+              echo "Creating $KEY"
+              curl -s -X POST "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env" \
+                -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+                -d "$BODY" | jq '{key: .key, target: .target}'
+            fi
+          done
 
       - name: Deploy to Vercel (production)
         env:

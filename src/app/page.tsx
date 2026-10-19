@@ -1,6 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { PersonaSelector } from '@/components/interview/PersonaSelector'
+import { LiveInterviewRoom } from '@/components/interview/LiveInterviewRoom'
+import { ScorecardView } from '@/components/interview/ScorecardView'
+import { PRESET_PERSONAS } from '@/sdk/personas'
+import { InterviewerPersona, InterviewSession } from '@/sdk/types'
 
 interface HiringManagerProfile {
   name: string; role: string; company: string; yearsHiring: number; bias: string
@@ -58,6 +63,48 @@ export default function Home() {
   const [warning, setWarning] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [runCount, setRunCount] = useState(0)
+
+  // ─── Live Interview State ───────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'interview' | 'stress-test'>('interview')
+  const [selectedPersona, setSelectedPersona] = useState<InterviewerPersona>(PRESET_PERSONAS['staff-architect'])
+  const [targetRole, setTargetRole] = useState('')
+  const [totalQuestions, setTotalQuestions] = useState(4)
+  const [interviewSession, setInterviewSession] = useState<InterviewSession | null>(null)
+  const [interviewToken, setInterviewToken] = useState('')
+  const [interviewLoading, setInterviewLoading] = useState(false)
+  const [interviewError, setInterviewError] = useState<string | null>(null)
+
+  async function handleStartInterview(e: React.FormEvent) {
+    e.preventDefault()
+    if (!cv.trim() || !jobDescription.trim()) {
+      setInterviewError('Por favor introduce tu CV y la descripción del puesto.')
+      return
+    }
+    setInterviewLoading(true)
+    setInterviewError(null)
+
+    try {
+      const res = await fetch('/api/interview/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cv,
+          jobDescription,
+          targetRole: targetRole || undefined,
+          personaId: selectedPersona.id,
+          totalQuestions,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'Error al iniciar la entrevista')
+      setInterviewSession(data.session)
+      setInterviewToken(data.token)
+    } catch (err: any) {
+      setInterviewError(err.message)
+    } finally {
+      setInterviewLoading(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -137,44 +184,178 @@ export default function Home() {
       <section className="hero no-print">
         <div className="container">
           <div className="hero-tag">
-            <span className="badge badge-accent">⬡ AI-Powered</span>
-            <span className="badge">Groq · LLaMA 3.3 70B</span>
+            <span className="badge badge-accent">⬡ AI Multi-Agent</span>
+            <span className="badge">NVIDIA NIM + Groq</span>
+            <span className="badge">Supabase Persistence</span>
             <span className="badge">Free & Open Source</span>
           </div>
-          <h1>CV <span className="gradient-text">Stress Test</span></h1>
+          <h1>
+            AI <span className="gradient-text">Career & Interview Arena</span>
+          </h1>
           <p className="hero-sub">
-            <strong>N hiring managers</strong> read your CV. See what they think.
+            <strong>Entrevista técnica interactiva</strong> con agentes de IA y stress test de CV.
           </p>
-          <p className="hero-sub2">Discover which roles fit you and exactly what to fix — before you send it.</p>
+          <p className="hero-sub2">
+            Pon a prueba tu conocimiento con entrevistadores rigurosos y evalúa tus respuestas con metodología STAR.
+          </p>
         </div>
       </section>
 
-      <section className="form-section no-print">
-        <div className="container">
-          <form onSubmit={handleSubmit}>
-            <div className="form-grid">
-              <div className="field">
-                <label>Your CV</label>
-                <textarea value={cv} onChange={e => setCv(e.target.value)} placeholder="Paste your full CV here..." rows={14} required />
-              </div>
-              <div className="field">
-                <label>Job Description</label>
-                <textarea value={jobDescription} onChange={e => setJobDescription(e.target.value)} placeholder="Paste the job description here..." rows={14} required />
-              </div>
-            </div>
-            <div className="form-footer">
-              <div className="n-selector">
-                <label>Reviewers: <strong>{n}</strong></label>
-                <input type="range" min={3} max={10} value={n} onChange={e => setN(Number(e.target.value))} />
-                <span className="n-hint">3 = fast · 10 = thorough</span>
-              </div>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Simulating...' : 'Run Stress Test →'}
-              </button>
-            </div>
-          </form>
+      {/* Tabs */}
+      <div className="container no-print">
+        <div className="main-tab-nav" role="tablist">
+          <button
+            role="tab"
+            aria-selected={activeTab === 'interview'}
+            onClick={() => setActiveTab('interview')}
+            className={`tab-nav-btn ${activeTab === 'interview' ? 'active' : ''}`}
+          >
+            🎙️ Simulador de Entrevista en Vivo (NVIDIA NIM + STAR)
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'stress-test'}
+            onClick={() => setActiveTab('stress-test')}
+            className={`tab-nav-btn ${activeTab === 'stress-test' ? 'active' : ''}`}
+          >
+            ⚡ Stress Test Rápido (5 Hiring Managers en Paralelo)
+          </button>
         </div>
-      </section>
+      </div>
+
+      {activeTab === 'interview' ? (
+        <div className="container">
+          {interviewSession?.status === 'completed' && interviewSession.finalScorecard ? (
+            <ScorecardView
+              scorecard={interviewSession.finalScorecard}
+              session={interviewSession}
+              onRestart={() => setInterviewSession(null)}
+            />
+          ) : interviewSession ? (
+            <LiveInterviewRoom
+              initialSession={interviewSession}
+              initialToken={interviewToken}
+              onProgress={(updated, token) => {
+                setInterviewSession(updated)
+                setInterviewToken(token)
+              }}
+              onFinish={(updated) => setInterviewSession(updated)}
+            />
+          ) : (
+            <section className="form-section no-print">
+              <form onSubmit={handleStartInterview}>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h3 className="section-title">1. Selecciona a tu Entrevistador de IA</h3>
+                  <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginTop: '-0.75rem' }}>
+                    Cada persona evaluará tu conocimiento con un sesgo técnico, estilo y nivel de dificultad particular:
+                  </p>
+                  <PersonaSelector
+                    selectedId={selectedPersona.id}
+                    onSelect={(p) => setSelectedPersona(p)}
+                  />
+                </div>
+
+                <div className="form-grid">
+                  <div className="field">
+                    <label htmlFor="iv-cv">Tu Currículum Vitae (CV)</label>
+                    <textarea id="iv-cv"
+                      value={cv}
+                      onChange={(e) => setCv(e.target.value)}
+                      placeholder="Pega aquí tu CV completo (experiencia, proyectos, logros y tecnologías)..."
+                      rows={12}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="iv-jd">Descripción de la Vacante (Job Description)</label>
+                    <textarea id="iv-jd"
+                      value={jobDescription}
+                      onChange={(e) => setJobDescription(e.target.value)}
+                      placeholder="Pega aquí la vacante o rol al que aspiras para que la IA calibre la dificultad..."
+                      rows={12}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-footer" style={{ marginTop: '1.25rem' }}>
+                  <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div className="n-selector">
+                      <label>Preguntas: <strong>{totalQuestions}</strong></label>
+                      <input
+                        type="range"
+                        min={3}
+                        max={6}
+                        value={totalQuestions}
+                        onChange={(e) => setTotalQuestions(Number(e.target.value))}
+                      />
+                      <span className="n-hint">3 = Express · 6 = Exhaustiva</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Rol / Especialidad (Opcional):</span>
+                      <input
+                        type="text"
+                        value={targetRole}
+                        onChange={(e) => setTargetRole(e.target.value)}
+                        placeholder="Ej. Staff Backend, Tech Lead, SRE..."
+                        style={{
+                          background: 'var(--surface-light)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '6px',
+                          color: 'var(--text)',
+                          padding: '0.4rem 0.75rem',
+                          fontSize: '0.85rem',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={interviewLoading || !cv.trim() || !jobDescription.trim()}
+                  >
+                    {interviewLoading ? 'Preparando entrevista...' : `Iniciar Entrevista con ${selectedPersona.name} →`}
+                  </button>
+                </div>
+
+                {interviewError && (
+                  <div role="alert" style={{ color: 'var(--red)', marginTop: '1rem', fontSize: '0.9rem' }}>
+                    ⚠️ {interviewError}
+                  </div>
+                )}
+              </form>
+            </section>
+          )}
+        </div>
+      ) : (
+        <>
+          <section className="form-section no-print">
+            <div className="container">
+              <form onSubmit={handleSubmit}>
+                <div className="form-grid">
+                  <div className="field">
+                    <label>Your CV</label>
+                    <textarea value={cv} onChange={e => setCv(e.target.value)} placeholder="Paste your full CV here..." rows={14} required />
+                  </div>
+                  <div className="field">
+                    <label>Job Description</label>
+                    <textarea value={jobDescription} onChange={e => setJobDescription(e.target.value)} placeholder="Paste the job description here..." rows={14} required />
+                  </div>
+                </div>
+                <div className="form-footer">
+                  <div className="n-selector">
+                    <label>Reviewers: <strong>{n}</strong></label>
+                    <input type="range" min={3} max={10} value={n} onChange={e => setN(Number(e.target.value))} />
+                    <span className="n-hint">3 = fast · 10 = thorough</span>
+                  </div>
+                  <button type="submit" className="btn btn-primary" disabled={loading}>
+                    {loading ? 'Simulating...' : 'Run Stress Test →'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
 
       {loading && (
         <div className="container loading-section no-print">
@@ -375,6 +556,8 @@ export default function Home() {
           )}
         </section>
       )}
+    </>
+  )}
     </main>
   )
 }
