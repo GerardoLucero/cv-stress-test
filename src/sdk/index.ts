@@ -1,0 +1,9 @@
+// Server-side surface. Browser code must import from '@/sdk/personas', '@/sdk/types'
+// or '@/sdk/speech-helper' directly so the engine and secrets never reach the client bundle.
+export * from './types'
+export * from './personas'
+export * from './schemas'
+export * from './model-provider'
+export * from './session-token'
+export * from './rate-limit'
+export * from './engine'

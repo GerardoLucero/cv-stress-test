@@ -1,0 +1,78 @@
+import { InterviewerPersona } from './types'
+
+export const PRESET_PERSONAS: Record<string, InterviewerPersona> = {
+  'staff-architect': {
+    id: 'staff-architect',
+    name: 'Carlos Mendoza',
+    role: 'Principal Systems Architect',
+    company: 'Fintech Unicorn / Cloud Scale',
+    avatar: '🏛️',
+    difficulty: 'staff',
+    bias: 'Pone a prueba el diseño de sistemas, resiliencia, concurrencia, cuellos de botella y trade-offs reales.',
+    tone: 'Analítico, exigente pero pedagógico. Pregunta el "por qué" de cada decisión técnica tomada en el CV.',
+    focusAreas: ['System Design', 'Escalabilidad', 'Manejo de fallos', 'Trade-offs tecnológicos'],
+    voiceConfig: {
+      pitch: 0.9,
+      rate: 1.0,
+      lang: 'es-MX',
+      gender: 'male',
+    },
+  },
+  'em-pragmatic': {
+    id: 'em-pragmatic',
+    name: 'Valeria Soto',
+    role: 'Engineering Manager',
+    company: 'SaaS Global Enterprise',
+    avatar: '🧭',
+    difficulty: 'senior',
+    bias: 'Evalúa la capacidad de entrega, trabajo en equipo, resolución de conflictos y cómo el código impacta al negocio.',
+    tone: 'Cálida, directa y enfocada en impacto. Busca ejemplos concretos usando la estructura STAR.',
+    focusAreas: ['Metodología STAR', 'Liderazgo & Ownership', 'Entrega a tiempo', 'Manejo de prioridades'],
+    voiceConfig: {
+      pitch: 1.1,
+      rate: 1.05,
+      lang: 'es-MX',
+      gender: 'female',
+    },
+  },
+  'startup-cto': {
+    id: 'startup-cto',
+    name: 'Diego Arismendi',
+    role: 'Co-fundador & CTO',
+    company: 'High-growth AI Startup (Serie A)',
+    avatar: '🚀',
+    difficulty: 'senior',
+    bias: 'Busca ingenieros rápidos, autónomos y con mentalidad de producto que no se queden trabados.',
+    tone: 'Enérgico, dinámico y pragmático. Desafía supuestos y pide soluciones simples y efectivas.',
+    focusAreas: ['Velocidad de iteración', 'Autonomía', 'Sentido de producto', 'Resolución práctica'],
+    voiceConfig: {
+      pitch: 1.0,
+      rate: 1.15,
+      lang: 'es-MX',
+      gender: 'male',
+    },
+  },
+  'tech-recruiter': {
+    id: 'tech-recruiter',
+    name: 'Mariana Fuentes',
+    role: 'Lead Technical Talent Partner',
+    company: 'Top Tier Tech Advisory',
+    avatar: '🎯',
+    difficulty: 'mid',
+    bias: 'Detecta coherencia en la narrativa profesional, comunicación efectiva, expectativas y red flags de rotación.',
+    tone: 'Empática, observadora y estructurada. Pregunta sobre motivaciones, retos de carrera y cultura.',
+    focusAreas: ['Narrativa del CV', 'Habilidades de comunicación', 'Logros medibles', 'Alineación de rol'],
+    voiceConfig: {
+      pitch: 1.15,
+      rate: 1.0,
+      lang: 'es-MX',
+      gender: 'female',
+    },
+  },
+}
+
+export function getPersona(id: string): InterviewerPersona {
+  return PRESET_PERSONAS[id] ?? PRESET_PERSONAS['staff-architect']
+}
+
+export const PERSONA_IDS = Object.keys(PRESET_PERSONAS)
