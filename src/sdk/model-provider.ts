@@ -11,6 +11,10 @@ export interface ModelCallOptions {
   temperature?: number
   maxTokens?: number
   jsonMode?: boolean
+  /** Per-call cap in ms; never exceeds the time left in the request budget. */
+  timeoutMs?: number
+  /** Absolute epoch ms after which no new provider call may start. Set by generateJson. */
+  deadline?: number
 }
 
 export interface ModelCallResult {
@@ -22,8 +26,19 @@ export interface ModelCallResult {
 
 // meta/llama-3.3-70b-instruct was retired by NVIDIA on 2026-08-26 (HTTP 410).
 const DEFAULT_NVIDIA_MODEL = process.env.NVIDIA_MODEL ?? 'openai/gpt-oss-20b'
-const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile'
-const TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS) || 20000
+// llama-3.3-70b-versatile was shut down by Groq on 2026-08-16 (HTTP 404).
+const DEFAULT_GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b'
+const TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS) || 25000
+// Whole-request budget across providers and retries; routes allow maxDuration = 60.
+const BUDGET_MS = Number(process.env.MODEL_BUDGET_MS) || 55000
+const MIN_CALL_MS = 3000
+
+/** Timeout for one provider call: its own cap, bounded by what is left of the budget. */
+function callTimeout(options: ModelCallOptions): number {
+  const cap = options.timeoutMs ?? TIMEOUT_MS
+  if (!options.deadline) return cap
+  return Math.min(cap, options.deadline - Date.now())
+}
 
 export class ModelProvider {
   private nvidiaApiKey?: string
@@ -51,6 +66,10 @@ export class ModelProvider {
 
     let lastError: unknown
     for (const provider of order) {
+      if (options.deadline && options.deadline - Date.now() < MIN_CALL_MS) {
+        lastError = new Error('Time budget exhausted before trying ' + provider)
+        break
+      }
       try {
         const text = provider === 'nvidia' ? await this.callNvidia(options) : await this.callGroq(options)
         // A blank reply is a provider failure, not a result: fall through to the next one.
@@ -98,11 +117,21 @@ export class ModelProvider {
     }
 
     const order = this.providerOrder()
+    const deadline = Date.now() + BUDGET_MS
     let lastError = 'unknown'
     for (let attempt = 0; attempt < 2; attempt++) {
       // The retry tries the other provider first, if there is one.
       const attemptOrder = attempt === 0 ? order : [...order].reverse()
-      const result = await this.generateText(attempt === 0 ? fullOptions : { ...fullOptions, temperature: 0 }, attemptOrder)
+      const attemptOptions = { ...(attempt === 0 ? fullOptions : { ...fullOptions, temperature: 0 }), deadline }
+      let result: ModelCallResult
+      try {
+        result = await this.generateText(attemptOptions, attemptOrder)
+      } catch (err) {
+        // Every provider failed this round (404, timeout, empty reply): try the reversed order once.
+        lastError = 'provider failure'
+        if (attempt === 1 || Date.now() >= deadline - MIN_CALL_MS) throw err
+        continue
+      }
       try {
         const data = schema.parse(extractJson(result.text))
         return { data, meta: result }
@@ -116,7 +145,7 @@ export class ModelProvider {
 
   private async callNvidia(options: ModelCallOptions): Promise<string> {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const timer = setTimeout(() => controller.abort(), callTimeout(options))
 
     try {
       const messages = options.messages.slice()
@@ -154,7 +183,7 @@ export class ModelProvider {
 
   private async callGroq(options: ModelCallOptions): Promise<string> {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const timer = setTimeout(() => controller.abort(), callTimeout(options))
 
     try {
       const messages = options.messages.slice()
@@ -172,7 +201,9 @@ export class ModelProvider {
           model: DEFAULT_GROQ_MODEL,
           messages,
           temperature: options.temperature ?? 0.3,
-          max_tokens: options.maxTokens ?? 2000,
+          // gpt-oss reasons before answering; reasoning tokens count against this limit.
+          max_tokens: options.maxTokens ?? 3000,
+          reasoning_effort: 'low',
           response_format: options.jsonMode ? { type: 'json_object' } : undefined,
         }),
         signal: controller.signal,
