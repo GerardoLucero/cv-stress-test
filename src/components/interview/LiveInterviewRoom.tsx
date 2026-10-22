@@ -1,5 +1,6 @@
 'use client'
 
+import { PersonaAvatar } from './PersonaAvatar'
 import { useEffect, useRef, useState } from 'react'
 import { InterviewSession, TurnEvaluation } from '@/sdk/types'
 import { SpeechHelper } from '@/sdk/speech-helper'
@@ -210,13 +211,13 @@ export function LiveInterviewRoom({ initialSession, initialToken, onProgress, on
       {/* Top Bar Header */}
       <div className="room-header">
         <div className="room-persona-info">
-          <span className="room-avatar">{session.persona.avatar}</span>
+          <PersonaAvatar persona={session.persona} size={48} />
           <div>
             <h3 className="room-persona-name">{session.persona.name}</h3>
             <p className="room-persona-role">{session.persona.role}</p>
           </div>
           <span className={`status-indicator ${isSpeaking ? 'speaking' : isListening ? 'listening' : 'idle'}`}>
-            {isSpeaking ? '🔊 Hablando...' : isListening ? '🎙️ Escuchándote...' : isSubmitting ? '🧠 Analizando...' : '🟢 Listo'}
+            {isSpeaking ? 'Hablando...' : isListening ? 'Escuchándote...' : isSubmitting ? 'Analizando...' : 'Listo'}
           </span>
         </div>
 
@@ -226,13 +227,13 @@ export function LiveInterviewRoom({ initialSession, initialToken, onProgress, on
               onClick={() => setMode('voice')}
               className={`mode-btn ${mode === 'voice' ? 'active' : ''}`}
             >
-              🎙️ Videollamada
+              Videollamada
             </button>
             <button
               onClick={() => setMode('chat')}
               className={`mode-btn ${mode === 'chat' ? 'active' : ''}`}
             >
-              💬 Chat Rápido
+              Chat Rápido
             </button>
           </div>
 
@@ -253,14 +254,14 @@ export function LiveInterviewRoom({ initialSession, initialToken, onProgress, on
 
       {roomError && (
         <div className="latency-warning-banner" role="alert">
-          <span>⚠️ {roomError}</span>
+          <span>{roomError}</span>
         </div>
       )}
 
       {/* Latency / Speed Fallback Banner */}
       {latencyWarning && (
         <div className="latency-warning-banner">
-          <span>⚠️ {latencyWarning}</span>
+          <span>{latencyWarning}</span>
           <button onClick={() => setMode('chat')} className="btn-switch-text">
             Cambiar a Solo Texto
           </button>
@@ -276,7 +277,6 @@ export function LiveInterviewRoom({ initialSession, initialToken, onProgress, on
               <video ref={videoRef} autoPlay playsInline muted className="webcam-feed" />
             ) : (
               <div className="webcam-placeholder">
-                <span className="placeholder-icon">📷</span>
                 <p>Cámara apagada</p>
               </div>
             )}
@@ -299,7 +299,7 @@ export function LiveInterviewRoom({ initialSession, initialToken, onProgress, on
                 onClick={toggleListening}
                 className={`btn-mic-toggle ${isListening ? 'listening' : ''}`}
               >
-                {isListening ? '⏹️ Detener Escucha' : '🎙️ Presiona para Hablar'}
+                {isListening ? '⏹Detener Escucha' : 'Presiona para Hablar'}
               </button>
             </div>
 
@@ -340,7 +340,7 @@ export function LiveInterviewRoom({ initialSession, initialToken, onProgress, on
                 disabled={isSpeaking}
                 className="btn-replay-audio"
               >
-                {isSpeaking ? '🔊 Hablando...' : '🔊 Repetir en Voz Alta'}
+                {isSpeaking ? 'Hablando...' : 'Repetir en Voz Alta'}
               </button>
             </div>
             <h2 className="current-question-text">{session.currentQuestion}</h2>
@@ -349,7 +349,7 @@ export function LiveInterviewRoom({ initialSession, initialToken, onProgress, on
           {/* Candidate Response Editor */}
           <div className="response-box">
             <label className="response-label" htmlFor="interview-answer">
-              <span>{isListening ? '🎙️ Escuchando y transcribiendo...' : 'Tu respuesta:'}</span>
+              <span>{isListening ? 'Escuchando y transcribiendo...' : 'Tu respuesta:'}</span>
               <span className="char-count">{currentAnswer.length} caracteres</span>
             </label>
             <textarea
@@ -379,7 +379,7 @@ export function LiveInterviewRoom({ initialSession, initialToken, onProgress, on
                 disabled={!currentAnswer.trim() || isSubmitting}
                 className="btn-send-answer"
               >
-                {isSubmitting ? '🧠 Evaluando respuesta...' : 'Enviar Respuesta y Continuar ➔'}
+                {isSubmitting ? 'Evaluando respuesta...' : 'Enviar Respuesta y Continuar'}
               </button>
             </div>
           </div>
@@ -387,7 +387,7 @@ export function LiveInterviewRoom({ initialSession, initialToken, onProgress, on
           {/* Transcript History Accordion */}
           {session.turns.length > 1 && (
             <div className="turns-history">
-              <h4 className="history-title">📜 Historial de Rondas Anteriores</h4>
+              <h4 className="history-title">Historial de Rondas Anteriores</h4>
               <div className="history-list">
                 {session.turns.slice(0, -1).map((turn) => (
                   <div key={turn.turnNumber} className="history-item">

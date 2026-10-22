@@ -19,7 +19,6 @@ export interface InterviewerPersona {
   name: string
   role: string
   company: string
-  avatar: string
   bias: string
   tone: string
   difficulty: InterviewerDifficulty

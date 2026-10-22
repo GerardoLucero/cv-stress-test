@@ -1,6 +1,7 @@
 'use client'
 
 import { PRESET_PERSONAS } from '@/sdk/personas'
+import { PersonaAvatar } from './PersonaAvatar'
 import { InterviewerPersona } from '@/sdk/types'
 
 interface PersonaSelectorProps {
@@ -25,7 +26,7 @@ export function PersonaSelector({ personas = Object.values(PRESET_PERSONAS), sel
             className={`persona-card ${isSelected ? 'selected' : ''}`}
           >
             <div className="persona-header">
-              <span className="persona-avatar">{p.avatar}</span>
+              <PersonaAvatar persona={p} size={44} />
               <div>
                 <h4 className="persona-name">{p.name}</h4>
                 <p className="persona-role">{p.role}</p>

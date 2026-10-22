@@ -29,8 +29,6 @@ const textList = z.array(z.string().trim().max(400)).max(10).default([])
 
 // ─── Interviewer personas ─────────────────────────────────────────────────────
 
-export const AVATARS = ['🏛️', '🧭', '🚀', '🎯', '🛡️', '🔬', '📊', '⚙️', '🎨', '💼', '🧠', '🔧'] as const
-
 const PITCH = { male: 0.9, female: 1.1, neutral: 1.0 } as const
 const RATE = { slow: 0.95, normal: 1.05, fast: 1.15 } as const
 
@@ -39,7 +37,6 @@ const generatedPersonaSchema = z.object({
   name: text(80).min(2),
   role: text(120).min(2),
   company: text(120).min(2),
-  avatar: z.enum(AVATARS).catch('🎯'),
   difficulty: z.enum(['junior', 'mid', 'senior', 'staff']).catch('senior'),
   bias: text(300).min(10),
   tone: text(300).min(5),
@@ -60,7 +57,6 @@ export function toPersona(p: z.infer<typeof generatedPersonaSchema>, id: string)
     name: p.name,
     role: p.role,
     company: p.company,
-    avatar: p.avatar,
     difficulty: p.difficulty,
     bias: p.bias,
     tone: p.tone,
@@ -76,7 +72,6 @@ export const customPersonaSchema = z.object({
   name: text(80).min(2),
   role: text(120).min(2),
   company: text(120).min(2),
-  avatar: z.string().max(8),
   difficulty: z.enum(['junior', 'mid', 'senior', 'staff']),
   bias: text(300).min(10),
   tone: text(300).min(5),
