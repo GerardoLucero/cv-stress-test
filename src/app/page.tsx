@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CharCount } from '@/components/interview/CharCount'
 import { LIMITS } from '@/sdk/limits'
 import { PersonaSelector } from '@/components/interview/PersonaSelector'
@@ -68,7 +68,7 @@ export default function Home() {
 
   // ─── Live Interview State ───────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'interview' | 'stress-test'>('interview')
-  const [selectedPersona, setSelectedPersona] = useState<InterviewerPersona>(PRESET_PERSONAS['staff-architect'])
+  const [selectedPersona, setSelectedPersona] = useState<InterviewerPersona | null>(null)
   const [targetRole, setTargetRole] = useState('')
   const [totalQuestions, setTotalQuestions] = useState(4)
   const [interviewSession, setInterviewSession] = useState<InterviewSession | null>(null)
@@ -78,10 +78,19 @@ export default function Home() {
   const [generatedPersonas, setGeneratedPersonas] = useState<InterviewerPersona[]>([])
   const [personasLoading, setPersonasLoading] = useState(false)
   const [personasError, setPersonasError] = useState<string | null>(null)
+  // The presets are generic engineering profiles: they only appear when generation fails.
+  const [showPresets, setShowPresets] = useState(false)
+
+  // Interviewers are tailored to the CV and vacancy, so editing either one invalidates them.
+  useEffect(() => {
+    setGeneratedPersonas((prev) => (prev.length ? [] : prev))
+    setSelectedPersona(null)
+  }, [cv, jobDescription])
 
   async function handleGeneratePersonas() {
     setPersonasLoading(true)
     setPersonasError(null)
+    setShowPresets(false)
     try {
       const res = await fetch('/api/interview/personas', {
         method: 'POST',
@@ -94,6 +103,7 @@ export default function Home() {
       setSelectedPersona(data.personas[0])
     } catch (err: any) {
       setPersonasError(err.message)
+      setShowPresets(true)
     } finally {
       setPersonasLoading(false)
     }
@@ -103,6 +113,10 @@ export default function Home() {
     e.preventDefault()
     if (!cv.trim() || !jobDescription.trim()) {
       setInterviewError('Por favor introduce tu CV y la descripción del puesto.')
+      return
+    }
+    if (!selectedPersona) {
+      setInterviewError('Genera y elige un entrevistador para continuar.')
       return
     }
     setInterviewLoading(true)
@@ -270,36 +284,7 @@ export default function Home() {
           ) : (
             <section className="form-section no-print">
               <form onSubmit={handleStartInterview}>
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <h3 className="section-title">1. Selecciona a tu Entrevistador de IA</h3>
-                  <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginTop: '-0.75rem' }}>
-                    Cada persona evaluará tu conocimiento con un sesgo técnico, estilo y nivel de dificultad particular:
-                  </p>
-                  <PersonaSelector
-                    personas={[...generatedPersonas, ...Object.values(PRESET_PERSONAS)]}
-                    selectedId={selectedPersona.id}
-                    onSelect={(p) => setSelectedPersona(p)}
-                  />
-                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="btn btn-outline"
-                      onClick={handleGeneratePersonas}
-                      disabled={personasLoading || cv.trim().length < 50 || jobDescription.trim().length < 20}
-                    >
-                      {personasLoading ? 'Generando entrevistadores...' : 'Generar entrevistadores para este puesto'}
-                    </button>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      Pega primero tu CV y la vacante (abajo) para que se ajusten al puesto.
-                    </span>
-                  </div>
-                  {personasError && (
-                    <div role="alert" style={{ color: 'var(--red)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
-                      {personasError}
-                    </div>
-                  )}
-                </div>
-
+                <h3 className="section-title">1. Pega tu CV y la vacante</h3>
                 <div className="form-grid">
                   <div className="field">
                     <label htmlFor="iv-cv">Tu Currículum Vitae (CV)</label>
@@ -325,6 +310,56 @@ export default function Home() {
                     />
                     <CharCount value={jobDescription} max={LIMITS.jobDescription} />
                   </div>
+                </div>
+
+                <div style={{ margin: '1.5rem 0' }}>
+                  <h3 className="section-title">2. Elige a tu entrevistador</h3>
+                  <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginTop: '-0.75rem' }}>
+                    Se generan según tu CV y la vacante, cada uno con un enfoque y nivel de exigencia distintos.
+                  </p>
+                  {generatedPersonas.length > 0 && (
+                    <PersonaSelector
+                      personas={generatedPersonas}
+                      selectedId={selectedPersona?.id ?? ''}
+                      onSelect={(p) => setSelectedPersona(p)}
+                    />
+                  )}
+                  {showPresets && (
+                    <>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Mientras tanto puedes usar un entrevistador genérico de perfil técnico:
+                      </p>
+                      <PersonaSelector
+                        personas={Object.values(PRESET_PERSONAS)}
+                        selectedId={selectedPersona?.id ?? ''}
+                        onSelect={(p) => setSelectedPersona(p)}
+                      />
+                    </>
+                  )}
+                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={handleGeneratePersonas}
+                      disabled={personasLoading || cv.trim().length < 50 || jobDescription.trim().length < 20}
+                    >
+                      {personasLoading
+                        ? 'Generando entrevistadores...'
+                        : generatedPersonas.length
+                          ? 'Generar otros entrevistadores'
+                          : 'Generar entrevistadores'}
+                    </button>
+                    {(cv.trim().length < 50 || jobDescription.trim().length < 20) && !personasLoading && (
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        Completa primero tu CV y la vacante.
+                      </span>
+                    )}
+                  </div>
+                  {personasError && (
+                    <div role="alert" style={{ color: 'var(--red)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                      {personasError}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-footer" style={{ marginTop: '1.25rem' }}>
@@ -362,9 +397,9 @@ export default function Home() {
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    disabled={interviewLoading || !cv.trim() || !jobDescription.trim()}
+                    disabled={interviewLoading || !selectedPersona || !cv.trim() || !jobDescription.trim()}
                   >
-                    {interviewLoading ? 'Preparando entrevista...' : `Iniciar Entrevista con ${selectedPersona.name} →`}
+                    {interviewLoading ? 'Preparando entrevista...' : selectedPersona ? `Iniciar entrevista con ${selectedPersona.name} →` : 'Elige un entrevistador'}
                   </button>
                 </div>
 
