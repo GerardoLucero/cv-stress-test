@@ -4,6 +4,8 @@ Simulate **N hiring managers** reading your CV. See what they think.
 
 Paste your CV + a job description → N independent AI personas evaluate it in parallel → synthesized verdict with advance rate, suggested roles with fit score, strengths, concerns, CV adjustments, and course recommendations.
 
+It also includes an **Interview Arena**: a live mock interview with an AI interviewer (voice or text, STAR scoring per answer) that ends in a scorecard with a hiring decision, radar scores and concrete CV fixes.
+
 ## Demo
 
 **[cv-stress-test.vercel.app](https://cv-stress-test.vercel.app)**
@@ -22,7 +24,7 @@ This tool is free and open source. If it helped your job search:
 
 1. Fork this repo
 2. Get a free API key at [console.groq.com](https://console.groq.com) (no credit card)
-3. Deploy to Vercel — add `GROQ_API_KEY` as environment variable
+3. Deploy to Vercel — add the environment variables below
 4. Share with your community
 
 ## Run locally
@@ -33,7 +35,20 @@ cd cv-stress-test
 npm install
 cp .env.example .env.local   # add your GROQ_API_KEY
 npm run dev
+npm test      # unit tests (vitest)
 ```
+
+### Environment variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `GROQ_API_KEY` | one of the two | Primary model provider |
+| `NVIDIA_NIM_API_KEY` | one of the two | Fallback provider (NVIDIA NIM) |
+| `NVIDIA_MODEL` | no | NIM model, default `openai/gpt-oss-20b` |
+| `MODEL_TIMEOUT_MS` | no | Per-call model timeout, default 20000 |
+| `SESSION_SECRET` | production | 32+ chars, seals interview sessions |
+
+Generate the secret with `openssl rand -base64 48`.
 
 ## API
 
@@ -46,6 +61,11 @@ curl -X POST https://cv-stress-test.vercel.app/api/analyze \
     "n": 5
   }'
 ```
+
+### Interview Arena
+
+`POST /api/interview/init` → `/answer` (once per question) → `/finalize`.
+Sessions are stateless: each response carries a sealed `token` (AES-256-GCM, 2 h TTL) that the client sends back, so nothing is stored server side and it works across serverless instances. Request bodies are validated with zod, model output is parsed and clamped, and endpoints are rate limited per IP (best effort, per instance).
 
 ## How it works
 
@@ -61,7 +81,8 @@ curl -X POST https://cv-stress-test.vercel.app/api/analyze \
 ## Tech stack
 
 - Next.js 15 · TypeScript
-- Vercel AI SDK + Groq (LLaMA 3)
+- Groq (LLaMA 3) with NVIDIA NIM fallback
+- zod validation · Vitest
 - Stateless — no database required
 - Deployed on Vercel
 
