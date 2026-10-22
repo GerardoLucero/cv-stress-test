@@ -209,19 +209,18 @@ export default function Home() {
       <section className="hero no-print">
         <div className="container">
           <div className="hero-tag">
-            <span className="badge badge-accent">⬡ AI Multi-Agent</span>
-            <span className="badge">NVIDIA NIM + Groq</span>
-            <span className="badge">Supabase Persistence</span>
-            <span className="badge">Free & Open Source</span>
+            <span className="badge">Voz o texto</span>
+            <span className="badge">Sin registro</span>
+            <span className="badge">Gratis y open source</span>
           </div>
           <h1>
-            AI <span className="gradient-text">Career & Interview Arena</span>
+            Practica tu entrevista <span className="gradient-text">antes de la real</span>
           </h1>
           <p className="hero-sub">
-            <strong>Entrevista técnica interactiva</strong> con agentes de IA y stress test de CV.
+            Un entrevistador de IA lee tu CV y la vacante, te hace de 2 a 5 preguntas y al final te dice qué mejorar.
           </p>
           <p className="hero-sub2">
-            Pon a prueba tu conocimiento con entrevistadores rigurosos y evalúa tus respuestas con metodología STAR.
+            Cada respuesta se evalúa con el método STAR. También puedes pasar tu CV por varios reclutadores simulados.
           </p>
         </div>
       </section>
@@ -594,7 +593,6 @@ export default function Home() {
 
               <div className="footer-meta no-print">
                 <span className="badge">{streamedManagers.length} managers · {totalTokens.toLocaleString()} tokens · {(durationMs / 1000).toFixed(1)}s</span>
-                <span className="badge badge-accent">Powered by Groq · LLaMA 3.3 70B</span>
               </div>
             </>
           )}
