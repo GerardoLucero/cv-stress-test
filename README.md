@@ -45,7 +45,9 @@ npm test      # unit tests (vitest)
 | `GROQ_API_KEY` | one of the two | Primary model provider |
 | `NVIDIA_NIM_API_KEY` | one of the two | Fallback provider (NVIDIA NIM) |
 | `NVIDIA_MODEL` | no | NIM model, default `openai/gpt-oss-20b` |
-| `MODEL_TIMEOUT_MS` | no | Per-call model timeout, default 20000 |
+| `GROQ_MODEL` | no | Groq model, default `openai/gpt-oss-120b` |
+| `MODEL_TIMEOUT_MS` | no | Per-call model timeout, default 25000 |
+| `MODEL_BUDGET_MS` | no | Total model time per request, default 55000 |
 | `SESSION_SECRET` | production | 32+ chars, seals interview sessions |
 
 Generate the secret with `openssl rand -base64 48`.
@@ -81,12 +83,12 @@ Sessions are stateless: each response carries a sealed `token` (AES-256-GCM, 2 h
 ## Tech stack
 
 - Next.js 15 · TypeScript
-- Groq (LLaMA 3) with NVIDIA NIM fallback
+- Groq (`gpt-oss-120b`) with NVIDIA NIM fallback
 - zod validation · Vitest
 - Stateless — no database required
 - Deployed on Vercel
 
-**Models:** `llama-3.1-8b-instant` (evaluations) · `llama-3.3-70b-versatile` (synthesis)  
+**Models:** `openai/gpt-oss-120b` on Groq (the llama-3.x models were retired on 2026-08-16) · `openai/gpt-oss-20b` on NVIDIA NIM as fallback  
 **Provider:** [Groq](https://groq.com) — free tier, no credit card required
 
 ## License
