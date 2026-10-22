@@ -328,12 +328,12 @@ export default function Home() {
                       <label>Preguntas: <strong>{totalQuestions}</strong></label>
                       <input
                         type="range"
-                        min={3}
-                        max={6}
+                        min={2}
+                        max={5}
                         value={totalQuestions}
                         onChange={(e) => setTotalQuestions(Number(e.target.value))}
                       />
-                      <span className="n-hint">3 = Express · 6 = Exhaustiva</span>
+                      <span className="n-hint">2 = Express · 5 = Completa</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Rol / Especialidad (Opcional):</span>

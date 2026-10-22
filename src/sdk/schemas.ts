@@ -11,8 +11,8 @@ export const LIMITS = {
   jobDescription: 5_000,
   targetRole: 120,
   answer: 4_000,
-  minQuestions: 1,
-  maxQuestions: 8,
+  minQuestions: 2,
+  maxQuestions: 5,
   maxBodyBytes: 100_000,
   // Session token carries the CV and every turn, so it gets a larger cap.
   maxTokenChars: 160_000,
