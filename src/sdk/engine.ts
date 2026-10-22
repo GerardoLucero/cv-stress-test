@@ -244,7 +244,7 @@ ${fence('cv', session.candidate.cv, 2000)}
 Genera el Scorecard final.`
 
     const { data } = await this.model.generateJson(
-      { systemPrompt, messages: [{ role: 'user', content: userPrompt }], temperature: 0.1, maxTokens: 4000 },
+      { systemPrompt, messages: [{ role: 'user', content: userPrompt }], temperature: 0.1, maxTokens: 4000, timeoutMs: 40000 },
       scorecardSchema
     )
 
