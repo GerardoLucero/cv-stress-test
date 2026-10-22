@@ -19,11 +19,12 @@ export interface InterviewerPersona {
   name: string
   role: string
   company: string
-  avatar: string
   bias: string
   tone: string
   difficulty: InterviewerDifficulty
   focusAreas: string[]
+  /** Where this interviewer opens: keeps the first question distinct per persona. */
+  openingAngle?: string
   voiceConfig: {
     pitch: number
     rate: number
