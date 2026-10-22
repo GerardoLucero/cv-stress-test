@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { CharCount } from '@/components/interview/CharCount'
+import { LIMITS } from '@/sdk/limits'
 import { PersonaSelector } from '@/components/interview/PersonaSelector'
 import { LiveInterviewRoom } from '@/components/interview/LiveInterviewRoom'
 import { ScorecardView } from '@/components/interview/ScorecardView'
@@ -214,13 +216,13 @@ export default function Home() {
             <span className="badge">Gratis y open source</span>
           </div>
           <h1>
-            Practica tu entrevista <span className="gradient-text">antes de la real</span>
+            Simulador de <span className="gradient-text">entrevistas técnicas</span>
           </h1>
           <p className="hero-sub">
-            Un entrevistador de IA lee tu CV y la vacante, te hace de 2 a 5 preguntas y al final te dice qué mejorar.
+            Entrevistadores de IA adaptados a tu perfil y a la vacante evalúan tus respuestas y entregan un informe con recomendaciones concretas.
           </p>
           <p className="hero-sub2">
-            Cada respuesta se evalúa con el método STAR. También puedes pasar tu CV por varios reclutadores simulados.
+            Evaluación por competencias con el método STAR. Incluye un análisis de CV con varios reclutadores simulados.
           </p>
         </div>
       </section>
@@ -306,8 +308,10 @@ export default function Home() {
                       onChange={(e) => setCv(e.target.value)}
                       placeholder="Pega aquí tu CV completo (experiencia, proyectos, logros y tecnologías)..."
                       rows={12}
+                      maxLength={LIMITS.cv}
                       required
                     />
+                    <CharCount value={cv} max={LIMITS.cv} />
                   </div>
                   <div className="field">
                     <label htmlFor="iv-jd">Descripción de la Vacante (Job Description)</label>
@@ -316,8 +320,10 @@ export default function Home() {
                       onChange={(e) => setJobDescription(e.target.value)}
                       placeholder="Pega aquí la vacante o rol al que aspiras para que la IA calibre la dificultad..."
                       rows={12}
+                      maxLength={LIMITS.jobDescription}
                       required
                     />
+                    <CharCount value={jobDescription} max={LIMITS.jobDescription} />
                   </div>
                 </div>
 
@@ -379,11 +385,13 @@ export default function Home() {
                 <div className="form-grid">
                   <div className="field">
                     <label>Your CV</label>
-                    <textarea value={cv} onChange={e => setCv(e.target.value)} placeholder="Paste your full CV here..." rows={14} required />
+                    <textarea value={cv} onChange={e => setCv(e.target.value)} placeholder="Paste your full CV here..." rows={14} maxLength={LIMITS.cv} required />
+                    <CharCount value={cv} max={LIMITS.cv} />
                   </div>
                   <div className="field">
                     <label>Job Description</label>
-                    <textarea value={jobDescription} onChange={e => setJobDescription(e.target.value)} placeholder="Paste the job description here..." rows={14} required />
+                    <textarea value={jobDescription} onChange={e => setJobDescription(e.target.value)} placeholder="Paste the job description here..." rows={14} maxLength={LIMITS.jobDescription} required />
+                    <CharCount value={jobDescription} max={LIMITS.jobDescription} />
                   </div>
                 </div>
                 <div className="form-footer">

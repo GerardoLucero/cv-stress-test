@@ -2,6 +2,7 @@ import { createGroq } from '@ai-sdk/groq'
 import { generateText } from 'ai'
 import { z } from 'zod'
 import { GROQ_MODEL as MODEL, GROQ_PROVIDER_OPTIONS } from '@/lib/groq-model'
+import { LIMITS } from '@/sdk/limits'
 import { generateManagers, runManager, synthesizeResults } from '@/lib/analyzer'
 import type { ManagerReaction } from '@/lib/analyzer'
 
@@ -84,6 +85,13 @@ export async function POST(request: Request) {
     return new Response(
       JSON.stringify({ error: 'cv and jobDescription are required' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  if (typeof cv !== 'string' || typeof jobDescription !== 'string' || cv.length > LIMITS.cv || jobDescription.length > LIMITS.jobDescription) {
+    return new Response(
+      JSON.stringify({ error: `El CV admite hasta ${LIMITS.cv} caracteres y la vacante hasta ${LIMITS.jobDescription}.` }),
+      { status: 413, headers: { 'Content-Type': 'application/json' } }
     )
   }
 
