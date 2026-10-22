@@ -18,6 +18,13 @@ describe('request schemas', () => {
     expect(initBodySchema.safeParse({ cv, jobDescription: jd, totalQuestions: -1 }).success).toBe(false)
   })
 
+  it('caps the CV at 6000 and the vacancy at 3000 characters', () => {
+    expect(initBodySchema.safeParse({ cv: 'x'.repeat(6_000), jobDescription: jd }).success).toBe(true)
+    expect(initBodySchema.safeParse({ cv: 'x'.repeat(6_001), jobDescription: jd }).success).toBe(false)
+    expect(initBodySchema.safeParse({ cv, jobDescription: 'x'.repeat(3_000) }).success).toBe(true)
+    expect(initBodySchema.safeParse({ cv, jobDescription: 'x'.repeat(3_001) }).success).toBe(false)
+  })
+
   it('allows between 2 and 5 questions', () => {
     for (const n of [2, 3, 4, 5]) expect(initBodySchema.safeParse({ cv, jobDescription: jd, totalQuestions: n }).success).toBe(true)
     for (const n of [0, 1, 6, 8]) expect(initBodySchema.safeParse({ cv, jobDescription: jd, totalQuestions: n }).success).toBe(false)

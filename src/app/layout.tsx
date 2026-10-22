@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Practica tu entrevista con IA',
+  title: 'Simulador de entrevistas técnicas',
   description: 'Entrevista simulada con IA sobre tu CV y la vacante, evaluada con el método STAR, y stress test de CV con varios reclutadores.',
 }
 
