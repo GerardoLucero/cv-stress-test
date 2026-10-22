@@ -68,7 +68,7 @@ export default function Home() {
 
   // ─── Live Interview State ───────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'interview' | 'stress-test'>('interview')
-  const [selectedPersona, setSelectedPersona] = useState<InterviewerPersona | null>(null)
+  const [selectedPersona, setSelectedPersona] = useState<InterviewerPersona>(PRESET_PERSONAS['staff-architect'])
   const [targetRole, setTargetRole] = useState('')
   const [totalQuestions, setTotalQuestions] = useState(4)
   const [interviewSession, setInterviewSession] = useState<InterviewSession | null>(null)
@@ -78,19 +78,26 @@ export default function Home() {
   const [generatedPersonas, setGeneratedPersonas] = useState<InterviewerPersona[]>([])
   const [personasLoading, setPersonasLoading] = useState(false)
   const [personasError, setPersonasError] = useState<string | null>(null)
-  // The presets are generic engineering profiles: they only appear when generation fails.
-  const [showPresets, setShowPresets] = useState(false)
+  // 'tech' shows the four default engineering interviewers; 'custom' only the generated ones.
+  const [personaView, setPersonaView] = useState<'tech' | 'custom'>('tech')
 
-  // Interviewers are tailored to the CV and vacancy, so editing either one invalidates them.
+  function showTechPersonas() {
+    setPersonaView('tech')
+    setPersonasError(null)
+    setSelectedPersona(PRESET_PERSONAS['staff-architect'])
+  }
+
+  // Generated interviewers are tailored to the CV and vacancy: editing either one invalidates them.
   useEffect(() => {
-    setGeneratedPersonas((prev) => (prev.length ? [] : prev))
-    setSelectedPersona(null)
+    if (!generatedPersonas.length) return
+    setGeneratedPersonas([])
+    showTechPersonas()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cv, jobDescription])
 
   async function handleGeneratePersonas() {
     setPersonasLoading(true)
     setPersonasError(null)
-    setShowPresets(false)
     try {
       const res = await fetch('/api/interview/personas', {
         method: 'POST',
@@ -101,9 +108,9 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error ?? 'No se pudieron generar entrevistadores.')
       setGeneratedPersonas(data.personas)
       setSelectedPersona(data.personas[0])
+      setPersonaView('custom')
     } catch (err: any) {
       setPersonasError(err.message)
-      setShowPresets(true)
     } finally {
       setPersonasLoading(false)
     }
@@ -113,10 +120,6 @@ export default function Home() {
     e.preventDefault()
     if (!cv.trim() || !jobDescription.trim()) {
       setInterviewError('Por favor introduce tu CV y la descripción del puesto.')
-      return
-    }
-    if (!selectedPersona) {
-      setInterviewError('Genera y elige un entrevistador para continuar.')
       return
     }
     setInterviewLoading(true)
@@ -315,27 +318,15 @@ export default function Home() {
                 <div style={{ margin: '1.5rem 0' }}>
                   <h3 className="section-title">2. Elige a tu entrevistador</h3>
                   <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginTop: '-0.75rem' }}>
-                    Se generan según tu CV y la vacante, cada uno con un enfoque y nivel de exigencia distintos.
+                    {personaView === 'custom'
+                      ? 'Entrevistadores generados según tu CV y la vacante, cada uno con un enfoque y nivel de exigencia distintos.'
+                      : 'Perfiles del ámbito tecnológico. Si tu puesto es de otra área o quieres un enfoque a tu medida, personaliza.'}
                   </p>
-                  {generatedPersonas.length > 0 && (
-                    <PersonaSelector
-                      personas={generatedPersonas}
-                      selectedId={selectedPersona?.id ?? ''}
-                      onSelect={(p) => setSelectedPersona(p)}
-                    />
-                  )}
-                  {showPresets && (
-                    <>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Mientras tanto puedes usar un entrevistador genérico de perfil técnico:
-                      </p>
-                      <PersonaSelector
-                        personas={Object.values(PRESET_PERSONAS)}
-                        selectedId={selectedPersona?.id ?? ''}
-                        onSelect={(p) => setSelectedPersona(p)}
-                      />
-                    </>
-                  )}
+                  <PersonaSelector
+                    personas={personaView === 'custom' ? generatedPersonas : Object.values(PRESET_PERSONAS)}
+                    selectedId={selectedPersona.id}
+                    onSelect={(p) => setSelectedPersona(p)}
+                  />
                   <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <button
                       type="button"
@@ -345,19 +336,24 @@ export default function Home() {
                     >
                       {personasLoading
                         ? 'Generando entrevistadores...'
-                        : generatedPersonas.length
+                        : personaView === 'custom'
                           ? 'Generar otros entrevistadores'
-                          : 'Generar entrevistadores'}
+                          : 'Personalizar según mi perfil'}
                     </button>
+                    {personaView === 'custom' && (
+                      <button type="button" className="btn btn-outline" onClick={showTechPersonas} disabled={personasLoading}>
+                        Ver entrevistadores de tecnología
+                      </button>
+                    )}
                     {(cv.trim().length < 50 || jobDescription.trim().length < 20) && !personasLoading && (
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                        Completa primero tu CV y la vacante.
+                        Para personalizar, completa primero tu CV y la vacante.
                       </span>
                     )}
                   </div>
                   {personasError && (
                     <div role="alert" style={{ color: 'var(--red)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
-                      {personasError}
+                      {personasError} Puedes continuar con uno de tecnología.
                     </div>
                   )}
                 </div>
@@ -397,9 +393,9 @@ export default function Home() {
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    disabled={interviewLoading || !selectedPersona || !cv.trim() || !jobDescription.trim()}
+                    disabled={interviewLoading || !cv.trim() || !jobDescription.trim()}
                   >
-                    {interviewLoading ? 'Preparando entrevista...' : selectedPersona ? `Iniciar entrevista con ${selectedPersona.name} →` : 'Elige un entrevistador'}
+                    {interviewLoading ? 'Preparando entrevista...' : `Iniciar entrevista con ${selectedPersona.name} →`}
                   </button>
                 </div>
 
