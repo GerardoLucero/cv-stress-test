@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'CV Stress Test',
-  description: 'Simulate how N hiring managers would react to your CV — before you send it.',
+  title: 'Practica tu entrevista con IA',
+  description: 'Entrevista simulada con IA sobre tu CV y la vacante, evaluada con el método STAR, y stress test de CV con varios reclutadores.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
