@@ -1,3 +1,5 @@
+import { after } from 'next/server'
+import { notifyUse } from '@/lib/notify'
 import { createGroq } from '@ai-sdk/groq'
 import { generateText } from 'ai'
 import { z } from 'zod'
@@ -96,6 +98,7 @@ export async function POST(request: Request) {
   }
 
   const n = Math.min(Math.max(body.n ?? 5, 3), 7)
+  after(() => notifyUse('stress-test', request.headers, `${n} reclutadores`))
   const start = Date.now()
   const encoder = new TextEncoder()
   let controllerClosed = false
