@@ -54,13 +54,14 @@ jobs:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_EMAIL: ${{ secrets.NTFY_EMAIL }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           # SESSION_SECRET seals the interview sessions; the app refuses to run in production without it.
           [ -n "$SESSION_SECRET" ] || { echo "SESSION_SECRET secret is missing"; exit 1; }
 
-          for KEY in GROQ_API_KEY NVIDIA_NIM_API_KEY NVIDIA_MODEL SESSION_SECRET NTFY_TOPIC NTFY_EMAIL; do
+          for KEY in GROQ_API_KEY NVIDIA_NIM_API_KEY NVIDIA_MODEL SESSION_SECRET NTFY_TOPIC NTFY_EMAIL NTFY_TOKEN; do
             VALUE="${!KEY}"
             if [ -z "$VALUE" ]; then echo "skip $KEY (not set in GitHub)"; continue; fi
 
