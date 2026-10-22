@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
+import { notifyUse } from '@/lib/notify'
 import { AIInterviewer, initBodySchema, sealSession } from '@/sdk'
 import { failure, guard } from '../_guard'
 
@@ -15,6 +16,7 @@ export async function POST(req: NextRequest) {
       persona ?? personaId,
       totalQuestions
     )
+    after(() => notifyUse('interview', req.headers, `${totalQuestions} preguntas`))
     return NextResponse.json({ session, token: sealSession(session) })
   } catch (error) {
     return failure('interview/init', error, 'No se pudo iniciar la entrevista. Intenta de nuevo.')
