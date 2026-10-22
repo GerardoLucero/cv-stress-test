@@ -27,11 +27,81 @@ const textList = z.array(z.string().trim().max(400)).max(10).default([])
 
 // ─── Request bodies ───────────────────────────────────────────────────────────
 
+// ─── Interviewer personas ─────────────────────────────────────────────────────
+
+export const AVATARS = ['🏛️', '🧭', '🚀', '🎯', '🛡️', '🔬', '📊', '⚙️', '🎨', '💼', '🧠', '🔧'] as const
+
+const PITCH = { male: 0.9, female: 1.1, neutral: 1.0 } as const
+const RATE = { slow: 0.95, normal: 1.05, fast: 1.15 } as const
+
+/** What the model writes for one interviewer. Voice numbers are derived, never trusted from the model. */
+const generatedPersonaSchema = z.object({
+  name: text(80).min(2),
+  role: text(120).min(2),
+  company: text(120).min(2),
+  avatar: z.enum(AVATARS).catch('🎯'),
+  difficulty: z.enum(['junior', 'mid', 'senior', 'staff']).catch('senior'),
+  bias: text(300).min(10),
+  tone: text(300).min(5),
+  focusAreas: z.array(text(60).min(2)).min(2).max(5),
+  openingAngle: text(400).min(10),
+  gender: z.enum(['male', 'female', 'neutral']).catch('neutral'),
+  pace: z.enum(['slow', 'normal', 'fast']).catch('normal'),
+})
+
+export const generatedPersonasSchema = z.object({
+  personas: z.array(generatedPersonaSchema).min(2).max(4),
+})
+
+/** Same shape the SDK uses everywhere; `id` and the voice are filled in by the server. */
+export function toPersona(p: z.infer<typeof generatedPersonaSchema>, id: string) {
+  return {
+    id,
+    name: p.name,
+    role: p.role,
+    company: p.company,
+    avatar: p.avatar,
+    difficulty: p.difficulty,
+    bias: p.bias,
+    tone: p.tone,
+    focusAreas: p.focusAreas,
+    openingAngle: p.openingAngle,
+    voiceConfig: { pitch: PITCH[p.gender], rate: RATE[p.pace], lang: 'es-MX', gender: p.gender },
+  }
+}
+
+/** A persona sent back by the client (it came from /personas). Re-validated: the client is not trusted. */
+export const customPersonaSchema = z.object({
+  id: z.string().regex(/^dyn-[a-z0-9-]{1,40}$/),
+  name: text(80).min(2),
+  role: text(120).min(2),
+  company: text(120).min(2),
+  avatar: z.string().max(8),
+  difficulty: z.enum(['junior', 'mid', 'senior', 'staff']),
+  bias: text(300).min(10),
+  tone: text(300).min(5),
+  focusAreas: z.array(text(60).min(2)).min(2).max(5),
+  openingAngle: text(400).optional(),
+  voiceConfig: z.object({
+    pitch: z.number().min(0.5).max(2),
+    rate: z.number().min(0.5).max(2),
+    lang: z.string().max(10),
+    gender: z.enum(['male', 'female', 'neutral']),
+  }),
+})
+
+export const personasBodySchema = z.object({
+  cv: text(LIMITS.cv).min(50, 'El CV es demasiado corto.'),
+  jobDescription: text(LIMITS.jobDescription).min(20, 'La descripción del puesto es demasiado corta.'),
+})
+
 export const initBodySchema = z.object({
   cv: text(LIMITS.cv).min(50, 'El CV es demasiado corto.'),
   jobDescription: text(LIMITS.jobDescription).min(20, 'La descripción del puesto es demasiado corta.'),
   targetRole: text(LIMITS.targetRole).optional(),
   personaId: z.enum(PERSONA_IDS as [string, ...string[]]).default('staff-architect'),
+  // A generated interviewer takes precedence over personaId.
+  persona: customPersonaSchema.optional(),
   totalQuestions: z.coerce
     .number()
     .int()

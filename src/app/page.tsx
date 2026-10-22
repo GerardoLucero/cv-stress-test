@@ -73,6 +73,29 @@ export default function Home() {
   const [interviewToken, setInterviewToken] = useState('')
   const [interviewLoading, setInterviewLoading] = useState(false)
   const [interviewError, setInterviewError] = useState<string | null>(null)
+  const [generatedPersonas, setGeneratedPersonas] = useState<InterviewerPersona[]>([])
+  const [personasLoading, setPersonasLoading] = useState(false)
+  const [personasError, setPersonasError] = useState<string | null>(null)
+
+  async function handleGeneratePersonas() {
+    setPersonasLoading(true)
+    setPersonasError(null)
+    try {
+      const res = await fetch('/api/interview/personas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cv, jobDescription }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'No se pudieron generar entrevistadores.')
+      setGeneratedPersonas(data.personas)
+      setSelectedPersona(data.personas[0])
+    } catch (err: any) {
+      setPersonasError(err.message)
+    } finally {
+      setPersonasLoading(false)
+    }
+  }
 
   async function handleStartInterview(e: React.FormEvent) {
     e.preventDefault()
@@ -91,7 +114,9 @@ export default function Home() {
           cv,
           jobDescription,
           targetRole: targetRole || undefined,
-          personaId: selectedPersona.id,
+          ...(selectedPersona.id.startsWith('dyn-')
+            ? { persona: selectedPersona }
+            : { personaId: selectedPersona.id }),
           totalQuestions,
         }),
       })
@@ -250,9 +275,28 @@ export default function Home() {
                     Cada persona evaluará tu conocimiento con un sesgo técnico, estilo y nivel de dificultad particular:
                   </p>
                   <PersonaSelector
+                    personas={[...generatedPersonas, ...Object.values(PRESET_PERSONAS)]}
                     selectedId={selectedPersona.id}
                     onSelect={(p) => setSelectedPersona(p)}
                   />
+                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={handleGeneratePersonas}
+                      disabled={personasLoading || cv.trim().length < 50 || jobDescription.trim().length < 20}
+                    >
+                      {personasLoading ? 'Generando entrevistadores...' : '✨ Generar entrevistadores para este puesto'}
+                    </button>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      Pega primero tu CV y la vacante (abajo) para que se ajusten al puesto.
+                    </span>
+                  </div>
+                  {personasError && (
+                    <div role="alert" style={{ color: 'var(--red)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                      ⚠️ {personasError}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-grid">

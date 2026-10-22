@@ -7,12 +7,12 @@ export const maxDuration = 60
 export async function POST(req: NextRequest) {
   const checked = await guard(req, 'interview-init', { max: 5, windowMs: 60 * 60 * 1000 }, initBodySchema)
   if ('response' in checked) return checked.response
-  const { cv, jobDescription, targetRole, personaId, totalQuestions } = checked.data
+  const { cv, jobDescription, targetRole, personaId, persona, totalQuestions } = checked.data
 
   try {
     const session = await new AIInterviewer().startSession(
       { cv, jobDescription, targetRole },
-      personaId,
+      persona ?? personaId,
       totalQuestions
     )
     return NextResponse.json({ session, token: sealSession(session) })

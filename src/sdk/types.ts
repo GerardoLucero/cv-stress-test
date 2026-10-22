@@ -24,6 +24,8 @@ export interface InterviewerPersona {
   tone: string
   difficulty: InterviewerDifficulty
   focusAreas: string[]
+  /** Where this interviewer opens: keeps the first question distinct per persona. */
+  openingAngle?: string
   voiceConfig: {
     pitch: number
     rate: number
