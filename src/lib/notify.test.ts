@@ -22,14 +22,37 @@ describe('notifyUse', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.stubEnv('NTFY_TOPIC', 'secret-topic')
     vi.stubEnv('NTFY_EMAIL', 'me@example.com')
+    vi.stubEnv('NTFY_TOKEN', '')
 
     await notifyUse('interview', headers, '4 preguntas')
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://ntfy.sh/secret-topic')
-    expect((init.headers as Record<string, string>).Email).toBe('me@example.com')
+    // ntfy.sh rejects the Email header for anonymous publishers, so it is only sent with a token.
+    expect((init.headers as Record<string, string>).Email).toBeUndefined()
     expect(init.body).toBe('Guadalajara, MX | 4 preguntas')
     expect(String(init.body)).not.toContain('203.0.113.9')
+  })
+
+  it('adds the e-mail and the token when a token is configured', async () => {
+    const fetchMock = vi.fn(async () => new Response('ok'))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubEnv('NTFY_TOPIC', 'secret-topic')
+    vi.stubEnv('NTFY_EMAIL', 'me@example.com')
+    vi.stubEnv('NTFY_TOKEN', 'tk_abc')
+
+    await notifyUse('interview', headers)
+
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1]
+    const h = init.headers as Record<string, string>
+    expect(h.Email).toBe('me@example.com')
+    expect(h.Authorization).toBe('Bearer tk_abc')
+  })
+
+  it('does not throw when ntfy answers an error status', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('no', { status: 400 })))
+    vi.stubEnv('NTFY_TOPIC', 'secret-topic')
+    await expect(notifyUse('interview', headers)).resolves.toBeUndefined()
   })
 
   it('swallows network failures', async () => {
