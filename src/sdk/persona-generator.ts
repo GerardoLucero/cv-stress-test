@@ -1,6 +1,6 @@
 import { CandidateInput, InterviewerPersona } from './types'
 import { ModelProvider } from './model-provider'
-import { AVATARS, generatedPersonasSchema, toPersona } from './schemas'
+import { generatedPersonasSchema, toPersona } from './schemas'
 import { fence } from './engine'
 
 /**
@@ -20,12 +20,11 @@ Reglas:
 - Nombres variados y verosímiles. Empresas descritas por industria y etapa, sin marcas reales.
 - "bias": lo que evalúa con más dureza. "tone": cómo habla. "difficulty": junior, mid, senior o staff según el nivel del puesto.
 - "openingAngle": el ángulo por el que abre la entrevista; debe ser DISTINTO en cada entrevistador (arquitectura, liderazgo, velocidad, narrativa del CV, seguridad, negocio...).
-- "avatar": un emoji de esta lista: ${AVATARS.join(' ')}
 - "gender": male, female o neutral. "pace": slow, normal o fast.
 - "focusAreas": 2 a 5 temas cortos.
 
 Devuelve ÚNICAMENTE JSON:
-{"personas":[{"name":"","role":"","company":"","avatar":"","difficulty":"senior","bias":"","tone":"","focusAreas":[""],"openingAngle":"","gender":"female","pace":"normal"}]}`
+{"personas":[{"name":"","role":"","company":"","difficulty":"senior","bias":"","tone":"","focusAreas":[""],"openingAngle":"","gender":"female","pace":"normal"}]}`
 
   const userPrompt = `${fence('job_description', candidate.jobDescription, 1500)}
 

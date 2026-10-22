@@ -7,7 +7,6 @@ const raw = (over: Record<string, unknown> = {}) => ({
   name: 'Ana Ruiz',
   role: 'Head of Platform',
   company: 'Fintech en etapa de crecimiento',
-  avatar: '🛡️',
   difficulty: 'staff',
   bias: 'Evalúa seguridad y confiabilidad con dureza.',
   tone: 'Directa y precisa.',
@@ -33,9 +32,9 @@ describe('generatePersonas', () => {
     expect(out[1].voiceConfig.rate).toBe(0.95)
   })
 
-  it('falls back on bad avatar, gender and difficulty instead of failing', () => {
+  it('falls back on bad gender and difficulty instead of failing', () => {
     const parsed = generatedPersonasSchema.parse({
-      personas: [raw({ avatar: 'x'.repeat(50), gender: 'robot', difficulty: 'god' }), raw()],
+      personas: [raw({ gender: 'robot', difficulty: 'god' }), raw()],
     })
     expect(parsed.personas[0].gender).toBe('neutral')
     expect(parsed.personas[0].difficulty).toBe('senior')
@@ -49,7 +48,7 @@ describe('generatePersonas', () => {
 
 describe('customPersonaSchema (client-supplied persona)', () => {
   const valid = {
-    id: 'dyn-1', name: 'Ana Ruiz', role: 'Head', company: 'Fintech', avatar: '🛡️', difficulty: 'staff',
+    id: 'dyn-1', name: 'Ana Ruiz', role: 'Head', company: 'Fintech', difficulty: 'staff',
     bias: 'Evalúa seguridad con dureza.', tone: 'Directa', focusAreas: ['Seguridad', 'SRE'],
     voiceConfig: { pitch: 1, rate: 1, lang: 'es-MX', gender: 'female' },
   }

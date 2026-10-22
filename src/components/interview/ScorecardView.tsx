@@ -56,7 +56,7 @@ export function ScorecardView({ scorecard, session, onRestart }: ScorecardViewPr
 
       {/* Dimensiones / Radar Bars */}
       <div className="dimensions-card">
-        <h3 className="section-title">📊 Calificación por Competencias Clave</h3>
+        <h3 className="section-title">Calificación por Competencias Clave</h3>
         <div className="dimensions-list">
           {dimensions.map((d) => (
             <div key={d.label} className="dimension-row">
@@ -81,7 +81,7 @@ export function ScorecardView({ scorecard, session, onRestart }: ScorecardViewPr
       {/* Fortalezas y Brechas Críticas */}
       <div className="scorecard-insights-grid">
         <div className="insight-card strengths">
-          <h4>✅ Fortalezas Demostradas</h4>
+          <h4>Fortalezas Demostradas</h4>
           <ul>
             {scorecard.topStrengths.map((s, idx) => (
               <li key={idx}>{s}</li>
@@ -90,7 +90,7 @@ export function ScorecardView({ scorecard, session, onRestart }: ScorecardViewPr
         </div>
 
         <div className="insight-card gaps">
-          <h4>⚠️ Brechas Críticas Detectadas</h4>
+          <h4>Brechas Críticas Detectadas</h4>
           <ul>
             {scorecard.criticalGaps.map((g, idx) => (
               <li key={idx}>{g}</li>
@@ -102,7 +102,7 @@ export function ScorecardView({ scorecard, session, onRestart }: ScorecardViewPr
       {/* Ajustes al CV sugeridos */}
       {scorecard.cvAdjustments && scorecard.cvAdjustments.length > 0 && (
         <div className="cv-adjustments-card">
-          <h3 className="section-title">📝 Modificaciones Sugeridas a tu CV</h3>
+          <h3 className="section-title">Modificaciones Sugeridas a tu CV</h3>
           <p className="section-sub">
             Ajusta estas secciones para que tu CV refleje mejor tu capacidad y no active banderas rojas en entrevistas:
           </p>
@@ -120,7 +120,7 @@ export function ScorecardView({ scorecard, session, onRestart }: ScorecardViewPr
       {/* Acciones Recomendadas */}
       {scorecard.recommendedActions && scorecard.recommendedActions.length > 0 && (
         <div className="actions-card">
-          <h3 className="section-title">🎯 Plan de Acción de Práctica</h3>
+          <h3 className="section-title">Plan de Acción de Práctica</h3>
           <ul className="actions-list">
             {scorecard.recommendedActions.map((action, idx) => (
               <li key={idx}>{action}</li>
@@ -132,7 +132,7 @@ export function ScorecardView({ scorecard, session, onRestart }: ScorecardViewPr
       {/* Botones de acción */}
       <div className="scorecard-actions">
         <button onClick={onRestart} className="btn-primary-action">
-          🔄 Realizar Nueva Entrevista
+          Realizar Nueva Entrevista
         </button>
       </div>
     </div>

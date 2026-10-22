@@ -234,7 +234,7 @@ export default function Home() {
             onClick={() => setActiveTab('interview')}
             className={`tab-nav-btn ${activeTab === 'interview' ? 'active' : ''}`}
           >
-            🎙️ Simulador de Entrevista en Vivo (NVIDIA NIM + STAR)
+            Entrevista simulada
           </button>
           <button
             role="tab"
@@ -242,7 +242,7 @@ export default function Home() {
             onClick={() => setActiveTab('stress-test')}
             className={`tab-nav-btn ${activeTab === 'stress-test' ? 'active' : ''}`}
           >
-            ⚡ Stress Test Rápido (5 Hiring Managers en Paralelo)
+            Stress test de CV
           </button>
         </div>
       </div>
@@ -285,7 +285,7 @@ export default function Home() {
                       onClick={handleGeneratePersonas}
                       disabled={personasLoading || cv.trim().length < 50 || jobDescription.trim().length < 20}
                     >
-                      {personasLoading ? 'Generando entrevistadores...' : '✨ Generar entrevistadores para este puesto'}
+                      {personasLoading ? 'Generando entrevistadores...' : 'Generar entrevistadores para este puesto'}
                     </button>
                     <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                       Pega primero tu CV y la vacante (abajo) para que se ajusten al puesto.
@@ -293,7 +293,7 @@ export default function Home() {
                   </div>
                   {personasError && (
                     <div role="alert" style={{ color: 'var(--red)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
-                      ⚠️ {personasError}
+                      {personasError}
                     </div>
                   )}
                 </div>
@@ -364,7 +364,7 @@ export default function Home() {
 
                 {interviewError && (
                   <div role="alert" style={{ color: 'var(--red)', marginTop: '1rem', fontSize: '0.9rem' }}>
-                    ⚠️ {interviewError}
+                    {interviewError}
                   </div>
                 )}
               </form>
@@ -447,7 +447,7 @@ export default function Home() {
 
           {warning && (
             <div className="warning-card no-print">
-              ⚠️ {warning}
+              {warning}
             </div>
           )}
 
@@ -472,7 +472,7 @@ export default function Home() {
 
               {sortedRoles.length > 0 && (
                 <div className="card roles-card">
-                  <h3 className="section-title">⬡ Roles you can apply to now</h3>
+                  <h3 className="section-title">Roles you can apply to now</h3>
                   <div className="roles-list">
                     {sortedRoles.map((r, i) => (
                       <div key={i} className="role-item">
@@ -489,11 +489,11 @@ export default function Home() {
 
               <div className="insights-grid">
                 <div className="card">
-                  <h3 className="section-title insights-title strengths">✓ Strengths</h3>
+                  <h3 className="section-title insights-title strengths">Strengths</h3>
                   <ul className="insights-list">{result.topStrengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
                 </div>
                 <div className="card">
-                  <h3 className="section-title insights-title concerns">✗ Concerns</h3>
+                  <h3 className="section-title insights-title concerns">Concerns</h3>
                   <ul className="insights-list">{result.topConcerns.map((c, i) => <li key={i}>{c}</li>)}</ul>
                 </div>
                 <div className="card">
@@ -504,7 +504,7 @@ export default function Home() {
 
               {result.cvAdjustments.length > 0 && (
                 <div className="card adjustments-card">
-                  <h3 className="section-title">✎ CV Adjustments</h3>
+                  <h3 className="section-title">CV Adjustments</h3>
                   <div className="adjustments-list">
                     {result.cvAdjustments.map((adj, i) => (
                       <div key={i} className="adjustment-item">
@@ -579,7 +579,7 @@ export default function Home() {
                   </div>
                   <div className="support-actions">
                     <a href="https://github.com/GerardoLucero/cv-stress-test" target="_blank" rel="noopener noreferrer" className="btn btn-outline">
-                      ★ Star on GitHub
+                      Star on GitHub
                     </a>
                     <a href="https://ko-fi.com/gerardolucero" target="_blank" rel="noopener noreferrer" className="btn btn-kofi">
                       Ko-fi
