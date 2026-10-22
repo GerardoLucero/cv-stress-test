@@ -2,12 +2,11 @@ import { createGroq } from '@ai-sdk/groq'
 import { generateText } from 'ai'
 import { z } from 'zod'
 
-// Groq free tier: no credit card required, 12K TPM on llama-3.3-70b-versatile
-// Note: this model does NOT support json_schema (structured outputs) — use plain JSON prompts
+// Groq free tier: no credit card required. Plain JSON prompts, validated with zod below.
+import { GROQ_MODEL as MODEL, GROQ_PROVIDER_OPTIONS } from './groq-model'
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
-const MODEL = 'llama-3.3-70b-versatile'
 
-// ─── Token budget — Groq free tier: 12K TPM ──────────────────────────────────
+// ─── Token budget — Groq free tier TPM limits ──────────────────────────────────
 const CV_MAX_CHARS = 2800
 const JD_MAX_CHARS = 700
 const SYNTH_CV_CHARS = 900
@@ -100,7 +99,8 @@ Balance: ${positiveCount} growth-minded · rest traditional. Mix company sizes. 
 
 Return JSON array of exactly ${n} objects:
 [{"name":"Full Name","role":"Specific title","company":"Industry and stage","yearsHiring":6,"bias":"One sentence evaluation lens"}]`,
-      maxOutputTokens: 800,
+      maxOutputTokens: 2500,
+      providerOptions: GROQ_PROVIDER_OPTIONS,
     })
     const parsed = HiringManagerSchema.array().parse(parseJson(text))
     return parsed.slice(0, n)
@@ -134,7 +134,8 @@ Be direct — reference actual CV content. 3-5 sentences first person. At least 
 Return ONLY a valid JSON object, no markdown, no extra text.`,
       prompt: `ROLE: ${jdTrunc}\n\nCV: ${cvTrunc}\n\nReturn JSON only:
 {"reaction":"3-5 sentence honest reaction","wouldAdvance":true,"concerns":["specific concern 1","specific concern 2"],"positives":["specific positive 1","specific positive 2"]}`,
-      maxOutputTokens: 450,
+      maxOutputTokens: 2000,
+      providerOptions: GROQ_PROVIDER_OPTIONS,
     })
 
     const parsed = ManagerReactionSchema.parse(parseJson(text))
@@ -222,7 +223,8 @@ Return JSON only:
 For suggestedRoles: 5 roles this candidate can apply to NOW.
 For courseRecommendations: 4 courses targeting exact gaps. priority: high/medium/low.
 For cvAdjustments: 5 specific adjustments.`,
-      maxOutputTokens: 1000,
+      maxOutputTokens: 3500,
+      providerOptions: GROQ_PROVIDER_OPTIONS,
     })
 
     const parsed = AnalysisResultSchema.parse(parseJson(text))

@@ -1,6 +1,7 @@
 import { createGroq } from '@ai-sdk/groq'
 import { generateText } from 'ai'
 import { z } from 'zod'
+import { GROQ_MODEL as MODEL, GROQ_PROVIDER_OPTIONS } from '@/lib/groq-model'
 import { generateManagers, runManager, synthesizeResults } from '@/lib/analyzer'
 import type { ManagerReaction } from '@/lib/analyzer'
 
@@ -8,7 +9,6 @@ export const maxDuration = 120
 
 // Groq free tier — no credit card required. Get key at console.groq.com
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
-const MODEL = 'llama-3.3-70b-versatile'
 
 // ─── Pre-flight agent decision ────────────────────────────────────────────────
 // One lightweight LLM call validates inputs AND extracts role/industry.
@@ -38,7 +38,8 @@ isValid: false ONLY if CV is empty/lorem ipsum OR JD is not a job description.
 Real CVs with any work experience → isValid: true.
 
 Return JSON only: {"isValid":true,"role":"Detected role","industry":"Detected industry","reason":"If invalid, why"}`,
-      maxOutputTokens: 150,
+      maxOutputTokens: 1000,
+      providerOptions: GROQ_PROVIDER_OPTIONS,
     })
     const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     return ValidationSchema.parse(JSON.parse(clean))
