@@ -18,6 +18,11 @@ describe('request schemas', () => {
     expect(initBodySchema.safeParse({ cv, jobDescription: jd, totalQuestions: -1 }).success).toBe(false)
   })
 
+  it('allows between 2 and 5 questions', () => {
+    for (const n of [2, 3, 4, 5]) expect(initBodySchema.safeParse({ cv, jobDescription: jd, totalQuestions: n }).success).toBe(true)
+    for (const n of [0, 1, 6, 8]) expect(initBodySchema.safeParse({ cv, jobDescription: jd, totalQuestions: n }).success).toBe(false)
+  })
+
   it('rejects empty and oversized answers', () => {
     const token = 't'.repeat(40)
     expect(answerBodySchema.safeParse({ token, answer: '   ' }).success).toBe(false)
