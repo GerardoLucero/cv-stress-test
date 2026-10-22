@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { CharCount } from '@/components/interview/CharCount'
+import { LIMITS } from '@/sdk/limits'
 import { PersonaSelector } from '@/components/interview/PersonaSelector'
 import { LiveInterviewRoom } from '@/components/interview/LiveInterviewRoom'
 import { ScorecardView } from '@/components/interview/ScorecardView'
@@ -73,6 +75,29 @@ export default function Home() {
   const [interviewToken, setInterviewToken] = useState('')
   const [interviewLoading, setInterviewLoading] = useState(false)
   const [interviewError, setInterviewError] = useState<string | null>(null)
+  const [generatedPersonas, setGeneratedPersonas] = useState<InterviewerPersona[]>([])
+  const [personasLoading, setPersonasLoading] = useState(false)
+  const [personasError, setPersonasError] = useState<string | null>(null)
+
+  async function handleGeneratePersonas() {
+    setPersonasLoading(true)
+    setPersonasError(null)
+    try {
+      const res = await fetch('/api/interview/personas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cv, jobDescription }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'No se pudieron generar entrevistadores.')
+      setGeneratedPersonas(data.personas)
+      setSelectedPersona(data.personas[0])
+    } catch (err: any) {
+      setPersonasError(err.message)
+    } finally {
+      setPersonasLoading(false)
+    }
+  }
 
   async function handleStartInterview(e: React.FormEvent) {
     e.preventDefault()
@@ -91,7 +116,9 @@ export default function Home() {
           cv,
           jobDescription,
           targetRole: targetRole || undefined,
-          personaId: selectedPersona.id,
+          ...(selectedPersona.id.startsWith('dyn-')
+            ? { persona: selectedPersona }
+            : { personaId: selectedPersona.id }),
           totalQuestions,
         }),
       })
@@ -184,19 +211,18 @@ export default function Home() {
       <section className="hero no-print">
         <div className="container">
           <div className="hero-tag">
-            <span className="badge badge-accent">⬡ AI Multi-Agent</span>
-            <span className="badge">NVIDIA NIM + Groq</span>
-            <span className="badge">Supabase Persistence</span>
-            <span className="badge">Free & Open Source</span>
+            <span className="badge">Voz o texto</span>
+            <span className="badge">Sin registro</span>
+            <span className="badge">Gratis y open source</span>
           </div>
           <h1>
-            AI <span className="gradient-text">Career & Interview Arena</span>
+            Simulador de <span className="gradient-text">entrevistas técnicas</span>
           </h1>
           <p className="hero-sub">
-            <strong>Entrevista técnica interactiva</strong> con agentes de IA y stress test de CV.
+            Entrevistadores de IA adaptados a tu perfil y a la vacante evalúan tus respuestas y entregan un informe con recomendaciones concretas.
           </p>
           <p className="hero-sub2">
-            Pon a prueba tu conocimiento con entrevistadores rigurosos y evalúa tus respuestas con metodología STAR.
+            Evaluación por competencias con el método STAR. Incluye un análisis de CV con varios reclutadores simulados.
           </p>
         </div>
       </section>
@@ -210,7 +236,7 @@ export default function Home() {
             onClick={() => setActiveTab('interview')}
             className={`tab-nav-btn ${activeTab === 'interview' ? 'active' : ''}`}
           >
-            🎙️ Simulador de Entrevista en Vivo (NVIDIA NIM + STAR)
+            Entrevista simulada
           </button>
           <button
             role="tab"
@@ -218,7 +244,7 @@ export default function Home() {
             onClick={() => setActiveTab('stress-test')}
             className={`tab-nav-btn ${activeTab === 'stress-test' ? 'active' : ''}`}
           >
-            ⚡ Stress Test Rápido (5 Hiring Managers en Paralelo)
+            Stress test de CV
           </button>
         </div>
       </div>
@@ -250,9 +276,28 @@ export default function Home() {
                     Cada persona evaluará tu conocimiento con un sesgo técnico, estilo y nivel de dificultad particular:
                   </p>
                   <PersonaSelector
+                    personas={[...generatedPersonas, ...Object.values(PRESET_PERSONAS)]}
                     selectedId={selectedPersona.id}
                     onSelect={(p) => setSelectedPersona(p)}
                   />
+                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={handleGeneratePersonas}
+                      disabled={personasLoading || cv.trim().length < 50 || jobDescription.trim().length < 20}
+                    >
+                      {personasLoading ? 'Generando entrevistadores...' : 'Generar entrevistadores para este puesto'}
+                    </button>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      Pega primero tu CV y la vacante (abajo) para que se ajusten al puesto.
+                    </span>
+                  </div>
+                  {personasError && (
+                    <div role="alert" style={{ color: 'var(--red)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                      {personasError}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-grid">
@@ -263,8 +308,10 @@ export default function Home() {
                       onChange={(e) => setCv(e.target.value)}
                       placeholder="Pega aquí tu CV completo (experiencia, proyectos, logros y tecnologías)..."
                       rows={12}
+                      maxLength={LIMITS.cv}
                       required
                     />
+                    <CharCount value={cv} max={LIMITS.cv} />
                   </div>
                   <div className="field">
                     <label htmlFor="iv-jd">Descripción de la Vacante (Job Description)</label>
@@ -273,8 +320,10 @@ export default function Home() {
                       onChange={(e) => setJobDescription(e.target.value)}
                       placeholder="Pega aquí la vacante o rol al que aspiras para que la IA calibre la dificultad..."
                       rows={12}
+                      maxLength={LIMITS.jobDescription}
                       required
                     />
+                    <CharCount value={jobDescription} max={LIMITS.jobDescription} />
                   </div>
                 </div>
 
@@ -284,12 +333,12 @@ export default function Home() {
                       <label>Preguntas: <strong>{totalQuestions}</strong></label>
                       <input
                         type="range"
-                        min={3}
-                        max={6}
+                        min={2}
+                        max={5}
                         value={totalQuestions}
                         onChange={(e) => setTotalQuestions(Number(e.target.value))}
                       />
-                      <span className="n-hint">3 = Express · 6 = Exhaustiva</span>
+                      <span className="n-hint">2 = Express · 5 = Completa</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Rol / Especialidad (Opcional):</span>
@@ -321,7 +370,7 @@ export default function Home() {
 
                 {interviewError && (
                   <div role="alert" style={{ color: 'var(--red)', marginTop: '1rem', fontSize: '0.9rem' }}>
-                    ⚠️ {interviewError}
+                    {interviewError}
                   </div>
                 )}
               </form>
@@ -336,11 +385,13 @@ export default function Home() {
                 <div className="form-grid">
                   <div className="field">
                     <label>Your CV</label>
-                    <textarea value={cv} onChange={e => setCv(e.target.value)} placeholder="Paste your full CV here..." rows={14} required />
+                    <textarea value={cv} onChange={e => setCv(e.target.value)} placeholder="Paste your full CV here..." rows={14} maxLength={LIMITS.cv} required />
+                    <CharCount value={cv} max={LIMITS.cv} />
                   </div>
                   <div className="field">
                     <label>Job Description</label>
-                    <textarea value={jobDescription} onChange={e => setJobDescription(e.target.value)} placeholder="Paste the job description here..." rows={14} required />
+                    <textarea value={jobDescription} onChange={e => setJobDescription(e.target.value)} placeholder="Paste the job description here..." rows={14} maxLength={LIMITS.jobDescription} required />
+                    <CharCount value={jobDescription} max={LIMITS.jobDescription} />
                   </div>
                 </div>
                 <div className="form-footer">
@@ -404,7 +455,7 @@ export default function Home() {
 
           {warning && (
             <div className="warning-card no-print">
-              ⚠️ {warning}
+              {warning}
             </div>
           )}
 
@@ -429,7 +480,7 @@ export default function Home() {
 
               {sortedRoles.length > 0 && (
                 <div className="card roles-card">
-                  <h3 className="section-title">⬡ Roles you can apply to now</h3>
+                  <h3 className="section-title">Roles you can apply to now</h3>
                   <div className="roles-list">
                     {sortedRoles.map((r, i) => (
                       <div key={i} className="role-item">
@@ -446,11 +497,11 @@ export default function Home() {
 
               <div className="insights-grid">
                 <div className="card">
-                  <h3 className="section-title insights-title strengths">✓ Strengths</h3>
+                  <h3 className="section-title insights-title strengths">Strengths</h3>
                   <ul className="insights-list">{result.topStrengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
                 </div>
                 <div className="card">
-                  <h3 className="section-title insights-title concerns">✗ Concerns</h3>
+                  <h3 className="section-title insights-title concerns">Concerns</h3>
                   <ul className="insights-list">{result.topConcerns.map((c, i) => <li key={i}>{c}</li>)}</ul>
                 </div>
                 <div className="card">
@@ -461,7 +512,7 @@ export default function Home() {
 
               {result.cvAdjustments.length > 0 && (
                 <div className="card adjustments-card">
-                  <h3 className="section-title">✎ CV Adjustments</h3>
+                  <h3 className="section-title">CV Adjustments</h3>
                   <div className="adjustments-list">
                     {result.cvAdjustments.map((adj, i) => (
                       <div key={i} className="adjustment-item">
@@ -536,7 +587,7 @@ export default function Home() {
                   </div>
                   <div className="support-actions">
                     <a href="https://github.com/GerardoLucero/cv-stress-test" target="_blank" rel="noopener noreferrer" className="btn btn-outline">
-                      ★ Star on GitHub
+                      Star on GitHub
                     </a>
                     <a href="https://ko-fi.com/gerardolucero" target="_blank" rel="noopener noreferrer" className="btn btn-kofi">
                       Ko-fi
@@ -550,7 +601,6 @@ export default function Home() {
 
               <div className="footer-meta no-print">
                 <span className="badge">{streamedManagers.length} managers · {totalTokens.toLocaleString()} tokens · {(durationMs / 1000).toFixed(1)}s</span>
-                <span className="badge badge-accent">Powered by Groq · LLaMA 3.3 70B</span>
               </div>
             </>
           )}

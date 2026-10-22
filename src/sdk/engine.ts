@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   CandidateInput,
+  InterviewerPersona,
   FinalScorecard,
   InterviewSession,
   InterviewTurn,
@@ -14,7 +15,7 @@ import { openingSchema, scorecardSchema, turnEvaluationSchema } from './schemas'
 export class InterviewStateError extends Error {}
 
 /** Candidate text goes between tags; strip look-alike tags so it cannot close them early. */
-function fence(tag: 'cv' | 'job_description' | 'candidate_answer', value: string, max: number): string {
+export function fence(tag: 'cv' | 'job_description' | 'candidate_answer', value: string, max: number): string {
   const safe = value.slice(0, max).replace(/<\/?(cv|job_description|candidate_answer)\s*>/gi, '')
   return `<${tag}>\n${safe}\n</${tag}>`
 }
@@ -35,22 +36,22 @@ export class AIInterviewer {
    */
   async startSession(
     candidate: CandidateInput,
-    personaId: string = 'staff-architect',
+    personaOrId: string | InterviewerPersona = 'staff-architect',
     totalQuestions: number = 4
   ): Promise<InterviewSession> {
-    const persona = getPersona(personaId)
+    const persona = typeof personaOrId === 'string' ? getPersona(personaOrId) : personaOrId
     const sessionId = randomUUID()
 
     const systemPrompt = `Eres ${persona.name}, ${persona.role} en ${persona.company}.
 Dificultad de entrevista: ${persona.difficulty.toUpperCase()}.
 Tu sesgo y enfoque: ${persona.bias}.
 Tu tono de voz: ${persona.tone}.
-Áreas clave de evaluación: ${persona.focusAreas.join(', ')}.
+Áreas clave de evaluación: ${persona.focusAreas.join(', ')}.${persona.openingAngle ? `\nÁngulo de apertura (obligatorio): ${persona.openingAngle}` : ''}
 
 Misión:
 Estás realizando una entrevista técnica/conductual real en vivo. No eres un chatbot genérico; actúas con rigor profesional.
 Vas a evaluar el CV del candidato contra la descripción del puesto (Job Description) y le harás preguntas desafiantes una a una.
-La primera pregunta debe basarse en un proyecto o tecnología específica que el candidato menciona en su CV para verificar autenticidad y profundidad.
+La primera pregunta debe basarse en algo específico que el candidato menciona en su CV y seguir tu ángulo de apertura, para verificar autenticidad y profundidad. No repitas la pregunta típica sobre el proyecto más llamativo si tu ángulo apunta a otra cosa.
 
 Devuelve estrictamente un JSON con esta estructura:
 {
