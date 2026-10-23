@@ -46,7 +46,7 @@ describe('session token', () => {
   })
 
   it('expires after two hours', () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['Date'] })
     const token = sealSession(session)
     vi.advanceTimersByTime(2 * 60 * 60 * 1000 + 1)
     expect(openSession(token)).toBeNull()
