@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod'
+import { getModelConfig } from './model-config'
 
 export interface ModelCallOptions {
   systemPrompt?: string
@@ -24,10 +25,7 @@ export interface ModelCallResult {
   durationMs: number
 }
 
-// meta/llama-3.3-70b-instruct was retired by NVIDIA on 2026-08-26 (HTTP 410).
-const DEFAULT_NVIDIA_MODEL = process.env.NVIDIA_MODEL ?? 'openai/gpt-oss-20b'
-// llama-3.3-70b-versatile was shut down by Groq on 2026-08-16 (HTTP 404).
-const DEFAULT_GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b'
+// Models per provider live in models.json (see model-config.ts); retired ones are skipped on 404/410.
 const TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS) || 25000
 // Whole-request budget across providers and retries; routes allow maxDuration = 60.
 const BUDGET_MS = Number(process.env.MODEL_BUDGET_MS) || 55000
@@ -60,29 +58,34 @@ export class ModelProvider {
     order: Array<'nvidia' | 'groq'> = this.providerOrder()
   ): Promise<ModelCallResult> {
     const startTime = Date.now()
+    const config = await getModelConfig()
+    // One candidate per (provider, model), in the configured order.
+    const candidates = order.flatMap((provider) =>
+      (provider === 'nvidia' ? config.nim : config.groq).map((model) => ({ provider, model }))
+    )
     if (order.length === 0) {
       throw new Error('No valid AI API Key found. Please set GROQ_API_KEY or NVIDIA_NIM_API_KEY in your environment.')
     }
 
     let lastError: unknown
-    for (const provider of order) {
+    for (const { provider, model } of candidates) {
       if (options.deadline && options.deadline - Date.now() < MIN_CALL_MS) {
-        lastError = new Error('Time budget exhausted before trying ' + provider)
+        lastError = new Error('Time budget exhausted before trying ' + provider + '/' + model)
         break
       }
       try {
-        const text = provider === 'nvidia' ? await this.callNvidia(options) : await this.callGroq(options)
+        const text = provider === 'nvidia' ? await this.callNvidia(options, model) : await this.callGroq(options, model)
         // A blank reply is a provider failure, not a result: fall through to the next one.
         if (!text.trim()) throw new Error(`${provider} returned an empty response`)
         return {
           text,
           providerUsed: provider,
-          modelUsed: provider === 'nvidia' ? DEFAULT_NVIDIA_MODEL : DEFAULT_GROQ_MODEL,
+          modelUsed: model,
           durationMs: Date.now() - startTime,
         }
       } catch (err) {
         lastError = err
-        console.warn(`[ModelProvider] ${provider} failed:`, err instanceof Error ? err.message.slice(0, 200) : 'unknown error')
+        console.warn(`[ModelProvider] ${provider}/${model} failed:`, err instanceof Error ? err.message.slice(0, 200) : 'unknown error')
       }
     }
     throw lastError instanceof Error ? lastError : new Error('All AI providers failed.')
@@ -143,7 +146,7 @@ export class ModelProvider {
     throw new Error(`The model did not return a usable answer (${lastError}).`)
   }
 
-  private async callNvidia(options: ModelCallOptions): Promise<string> {
+  private async callNvidia(options: ModelCallOptions, model: string): Promise<string> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), callTimeout(options))
 
@@ -160,7 +163,7 @@ export class ModelProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: DEFAULT_NVIDIA_MODEL,
+          model,
           messages,
           temperature: options.temperature ?? 0.3,
           // gpt-oss spends part of the budget on reasoning before the JSON.
@@ -181,7 +184,7 @@ export class ModelProvider {
     }
   }
 
-  private async callGroq(options: ModelCallOptions): Promise<string> {
+  private async callGroq(options: ModelCallOptions, model: string): Promise<string> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), callTimeout(options))
 
@@ -198,7 +201,7 @@ export class ModelProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: DEFAULT_GROQ_MODEL,
+          model,
           messages,
           temperature: options.temperature ?? 0.3,
           // gpt-oss reasons before answering; reasoning tokens count against this limit.

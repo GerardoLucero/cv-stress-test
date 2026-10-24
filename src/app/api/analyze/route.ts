@@ -3,7 +3,7 @@ import { notifyUse } from '@/lib/notify'
 import { createGroq } from '@ai-sdk/groq'
 import { generateText } from 'ai'
 import { z } from 'zod'
-import { GROQ_MODEL as MODEL, GROQ_PROVIDER_OPTIONS } from '@/lib/groq-model'
+import { getGroqModel, GROQ_PROVIDER_OPTIONS } from '@/lib/groq-model'
 import { LIMITS } from '@/sdk/limits'
 import { generateManagers, runManager, synthesizeResults } from '@/lib/analyzer'
 import type { ManagerReaction } from '@/lib/analyzer'
@@ -30,7 +30,7 @@ async function validateAndExtract(cv: string, jd: string): Promise<{
 }> {
   try {
     const { text } = await generateText({
-      model: groq(MODEL),
+      model: groq(await getGroqModel()),
       system: 'You are a pre-flight validator. Return only valid JSON, no markdown.',
       prompt: `Validate these inputs and extract role/industry.
 

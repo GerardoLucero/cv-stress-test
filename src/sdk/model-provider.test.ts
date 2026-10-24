@@ -10,6 +10,21 @@ const reply = (content: string) =>
 afterEach(() => vi.unstubAllGlobals())
 
 describe('ModelProvider', () => {
+  it('tries the next Groq model in models.json when the first one is retired', async () => {
+    vi.stubEnv('GROQ_MODEL', 'retired/model')
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+      JSON.parse(String(init?.body)).model === 'retired/model' ? new Response('{}', { status: 404 }) : reply('{"ok":true}')
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = new ModelProvider({ groqApiKey: 'g', provider: 'groq' })
+
+    const { meta } = await provider.generateJson(opts, schema)
+
+    expect(meta.providerUsed).toBe('groq')
+    expect(meta.modelUsed).toBe('openai/gpt-oss-120b')
+    vi.unstubAllEnvs()
+  })
+
   it('falls back to NVIDIA when Groq answers 404 (retired model)', async () => {
     const fetchMock = vi.fn(async (url: string) =>
       url.includes('groq.com') ? new Response('{}', { status: 404 }) : reply('{"ok":true}')

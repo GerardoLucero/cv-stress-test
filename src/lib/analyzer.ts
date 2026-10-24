@@ -3,7 +3,7 @@ import { generateText } from 'ai'
 import { z } from 'zod'
 
 // Groq free tier: no credit card required. Plain JSON prompts, validated with zod below.
-import { GROQ_MODEL as MODEL, GROQ_PROVIDER_OPTIONS } from './groq-model'
+import { getGroqModel, GROQ_PROVIDER_OPTIONS } from './groq-model'
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
 
 // ─── Token budget — Groq free tier TPM limits ──────────────────────────────────
@@ -82,7 +82,7 @@ export async function generateManagers(n: number, role: string): Promise<HiringM
   const positiveCount = Math.round(n * 0.45)
   try {
     const { text } = await generateText({
-      model: groq(MODEL),
+      model: groq(await getGroqModel()),
       system: 'You are a persona generation engine. Return only valid JSON arrays, no markdown.',
       prompt: `Generate exactly ${n} distinct hiring managers for: "${role.slice(0, 300)}"
 
@@ -127,7 +127,7 @@ export async function runManager(
 
   try {
     const { text, usage } = await generateText({
-      model: groq(MODEL),
+      model: groq(await getGroqModel()),
       system: `You are ${manager.name}, ${manager.role} at ${manager.company}.
 ${manager.yearsHiring} years hiring. Lens: ${manager.bias}
 Be direct — reference actual CV content. 3-5 sentences first person. At least one concrete positive.
@@ -194,7 +194,7 @@ export async function synthesizeResults(
 
   try {
     const { text } = await generateText({
-      model: groq(MODEL),
+      model: groq(await getGroqModel()),
       system: 'You are a senior career coach with 15 years of experience. Return only valid JSON, no markdown.',
       prompt: `Synthesize feedback from ${successful.length} hiring managers.
 
