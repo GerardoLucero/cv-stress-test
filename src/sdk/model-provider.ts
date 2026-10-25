@@ -23,6 +23,8 @@ export interface ModelCallResult {
   providerUsed: 'nvidia' | 'groq'
   modelUsed: string
   durationMs: number
+  /** Prompt + completion tokens reported by the provider (0 when it reports none). */
+  tokens: number
 }
 
 // Models per provider live in models.json (see model-config.ts); retired ones are skipped on 404/410.
@@ -74,13 +76,15 @@ export class ModelProvider {
         break
       }
       try {
-        const text = provider === 'nvidia' ? await this.callNvidia(options, model) : await this.callGroq(options, model)
+        const { text, tokens } =
+          provider === 'nvidia' ? await this.callNvidia(options, model) : await this.callGroq(options, model)
         // A blank reply is a provider failure, not a result: fall through to the next one.
         if (!text.trim()) throw new Error(`${provider} returned an empty response`)
         return {
           text,
           providerUsed: provider,
           modelUsed: model,
+          tokens,
           durationMs: Date.now() - startTime,
         }
       } catch (err) {
@@ -146,7 +150,7 @@ export class ModelProvider {
     throw new Error(`The model did not return a usable answer (${lastError}).`)
   }
 
-  private async callNvidia(options: ModelCallOptions, model: string): Promise<string> {
+  private async callNvidia(options: ModelCallOptions, model: string): Promise<{ text: string; tokens: number }> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), callTimeout(options))
 
@@ -178,13 +182,13 @@ export class ModelProvider {
       }
 
       const json = await res.json()
-      return json.choices?.[0]?.message?.content ?? ''
+      return { text: json.choices?.[0]?.message?.content ?? '', tokens: Number(json.usage?.total_tokens) || 0 }
     } finally {
       clearTimeout(timer)
     }
   }
 
-  private async callGroq(options: ModelCallOptions, model: string): Promise<string> {
+  private async callGroq(options: ModelCallOptions, model: string): Promise<{ text: string; tokens: number }> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), callTimeout(options))
 
@@ -217,7 +221,7 @@ export class ModelProvider {
       }
 
       const json = await res.json()
-      return json.choices?.[0]?.message?.content ?? ''
+      return { text: json.choices?.[0]?.message?.content ?? '', tokens: Number(json.usage?.total_tokens) || 0 }
     } finally {
       clearTimeout(timer)
     }
