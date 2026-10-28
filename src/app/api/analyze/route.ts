@@ -1,55 +1,25 @@
 import { after } from 'next/server'
 import { notifyUse } from '@/lib/notify'
-import { createGroq } from '@ai-sdk/groq'
-import { generateText } from 'ai'
 import { z } from 'zod'
-import { GROQ_MODEL as MODEL, GROQ_PROVIDER_OPTIONS } from '@/lib/groq-model'
 import { LIMITS } from '@/sdk/limits'
-import { generateManagers, runManager, synthesizeResults } from '@/lib/analyzer'
+import { clientIp, rateLimit } from '@/sdk/rate-limit'
+import { generateManagers, runManager, synthesizeResults, validateAndExtract } from '@/lib/analyzer'
 import type { ManagerReaction } from '@/lib/analyzer'
 
 export const maxDuration = 120
 
-// Groq free tier — no credit card required. Get key at console.groq.com
-const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
+// Each run is 1 + 1 + N + 1 model calls, so it is capped harder than the interview routes.
+const RUNS_PER_WINDOW = 6
+const WINDOW_MS = 30 * 60 * 1000
 
-// ─── Pre-flight agent decision ────────────────────────────────────────────────
-// One lightweight LLM call validates inputs AND extracts role/industry.
-// This IS the "agent decides" step — if invalid, we skip all N manager calls.
-// Costs ~300 tokens. Prevents wasting the full budget on garbage inputs.
-
-const ValidationSchema = z.object({
-  isValid: z.boolean(),
-  role: z.string().describe('Job role detected from the JD'),
-  industry: z.string().describe('Industry detected from the JD'),
-  reason: z.string().optional().describe('If invalid, why'),
+const BodySchema = z.object({
+  cv: z.string().trim().min(1, 'cv and jobDescription are required'),
+  jobDescription: z.string().trim().min(1, 'cv and jobDescription are required'),
+  n: z.number().int().optional(),
 })
 
-async function validateAndExtract(cv: string, jd: string): Promise<{
-  isValid: boolean; role: string; industry: string; reason?: string
-}> {
-  try {
-    const { text } = await generateText({
-      model: groq(MODEL),
-      system: 'You are a pre-flight validator. Return only valid JSON, no markdown.',
-      prompt: `Validate these inputs and extract role/industry.
-
-CV (first 400 chars): ${cv.slice(0, 400)}
-JD (first 200 chars): ${jd.slice(0, 200)}
-
-isValid: false ONLY if CV is empty/lorem ipsum OR JD is not a job description.
-Real CVs with any work experience → isValid: true.
-
-Return JSON only: {"isValid":true,"role":"Detected role","industry":"Detected industry","reason":"If invalid, why"}`,
-      maxOutputTokens: 1000,
-      providerOptions: GROQ_PROVIDER_OPTIONS,
-    })
-    const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    return ValidationSchema.parse(JSON.parse(clean))
-  } catch {
-    return { isValid: true, role: 'Professional', industry: 'General' }
-  }
-}
+const json = (body: object, status: number, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
 // ─── Staggered parallel evaluation ───────────────────────────────────────────
 // Managers start 600ms apart to stay within Groq 12K TPM free tier.
@@ -80,24 +50,29 @@ async function runStaggered(
 }
 
 export async function POST(request: Request) {
-  const body = await request.json() as { cv: string; jobDescription: string; n?: number }
-  const { cv, jobDescription } = body
-
-  if (!cv?.trim() || !jobDescription?.trim()) {
-    return new Response(
-      JSON.stringify({ error: 'cv and jobDescription are required' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
+  const rl = rateLimit(`analyze:${clientIp(request)}`, RUNS_PER_WINDOW, WINDOW_MS)
+  if (!rl.ok) {
+    return json({ error: 'Demasiadas solicitudes. Intenta de nuevo más tarde.' }, 429, { 'Retry-After': String(rl.retryAfterSec) })
   }
 
-  if (typeof cv !== 'string' || typeof jobDescription !== 'string' || cv.length > LIMITS.cv || jobDescription.length > LIMITS.jobDescription) {
-    return new Response(
-      JSON.stringify({ error: `El CV admite hasta ${LIMITS.cv} caracteres y la vacante hasta ${LIMITS.jobDescription}.` }),
-      { status: 413, headers: { 'Content-Type': 'application/json' } }
-    )
+  const length = Number(request.headers.get('content-length') ?? 0)
+  if (length > LIMITS.maxBodyBytes) return json({ error: 'La solicitud es demasiado grande.' }, 413)
+
+  let raw: unknown
+  try {
+    raw = await request.json()
+  } catch {
+    return json({ error: 'El cuerpo debe ser JSON válido.' }, 400)
+  }
+  const parsedBody = BodySchema.safeParse(raw)
+  if (!parsedBody.success) return json({ error: parsedBody.error.issues[0]?.message ?? 'Solicitud inválida.' }, 400)
+  const { cv, jobDescription } = parsedBody.data
+
+  if (cv.length > LIMITS.cv || jobDescription.length > LIMITS.jobDescription) {
+    return json({ error: `El CV admite hasta ${LIMITS.cv} caracteres y la vacante hasta ${LIMITS.jobDescription}.` }, 413)
   }
 
-  const n = Math.min(Math.max(body.n ?? 5, 3), 7)
+  const n = Math.min(Math.max(parsedBody.data.n ?? 5, 3), 7)
   after(() => notifyUse('stress-test', request.headers, `${n} reclutadores`))
   const start = Date.now()
   const encoder = new TextEncoder()
@@ -133,19 +108,25 @@ export async function POST(request: Request) {
         const successful = reactions.filter(r => !r.error && r.reaction)
         const failRate = reactions.length > 0
           ? (reactions.length - successful.length) / reactions.length : 0
-        const firstError = reactions.find(r => r.error)?.error ?? ''
-        const warning = failRate > 0.4
-          ? `${reactions.length - successful.length}/${reactions.length} managers failed. Error: ${firstError.slice(0, 200)}`
-          : undefined
+        if (successful.length === 0) {
+          emit({ type: 'error', error: 'El servicio de IA no está disponible en este momento. Intenta de nuevo en unos minutos.' })
+          return close()
+        }
 
         const result = await synthesizeResults(cv, jobDescription, successful)
-        const totalTokens = reactions.reduce((s, r) => s + (r?.tokens ?? 0), 0)
+        const failedCount = reactions.length - successful.length
+        const warning = result.degraded
+          ? 'No se pudo generar la síntesis completa; solo se muestran las reacciones y la tasa de avance.'
+          : failRate > 0.4
+            ? `${failedCount}/${reactions.length} reclutadores no respondieron; el resultado puede ser menos representativo.`
+            : undefined
+        const totalTokens = reactions.reduce((s, r) => s + (r?.tokens ?? 0), 0) + (result.synthesisTokens ?? 0)
 
         emit({ type: 'complete', result, reactions, totalTokens, durationMs: Date.now() - start, warning })
         close()
       } catch (err) {
-        console.error('[analyze] error', { error: String(err), n, durationMs: Date.now() - start })
-        emit({ type: 'error', error: String(err) })
+        console.error('[analyze] error', { error: err instanceof Error ? err.message.slice(0, 200) : 'unknown', n, durationMs: Date.now() - start })
+        emit({ type: 'error', error: 'No se pudo completar el análisis. Intenta de nuevo.' })
         close()
       }
     },

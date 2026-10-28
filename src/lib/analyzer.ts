@@ -1,10 +1,10 @@
-import { createGroq } from '@ai-sdk/groq'
-import { generateText } from 'ai'
 import { z } from 'zod'
+import { ModelProvider } from '@/sdk/model-provider'
+import { fence } from '@/sdk/engine'
 
-// Groq free tier: no credit card required. Plain JSON prompts, validated with zod below.
-import { GROQ_MODEL as MODEL, GROQ_PROVIDER_OPTIONS } from './groq-model'
-const groq = createGroq({ apiKey: process.env.GROQ_API_KEY })
+// Same cascade as the interview arena: Groq first, NVIDIA NIM as fallback, models from
+// models.json. Replies are validated with zod and retried once on the other provider.
+const model = new ModelProvider()
 
 // ─── Token budget — Groq free tier TPM limits ──────────────────────────────────
 const CV_MAX_CHARS = 2800
@@ -43,10 +43,6 @@ const AnalysisResultSchema = z.object({
   oneLiner: z.string(),
 })
 
-function parseJson(text: string): unknown {
-  return JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())
-}
-
 // ─── Exported interfaces ──────────────────────────────────────────────────────
 
 export interface HiringManagerProfile {
@@ -74,6 +70,45 @@ export interface AnalysisResult {
   cvAdjustments: Array<{ section: string; action: string }>
   courseRecommendations: CourseRecommendation[]
   verdict: string; oneLiner: string
+  /** True when the synthesis step failed and only the advance rate is real. */
+  degraded?: boolean
+  synthesisTokens?: number
+}
+
+// ─── Step 0: pre-flight validation ────────────────────────────────────────────
+// One cheap call validates the inputs and extracts role/industry, so garbage input
+// does not burn the N manager calls. If every provider is down the check is skipped
+// (the manager calls will then fail visibly instead).
+
+const ValidationSchema = z.object({
+  isValid: z.boolean(),
+  role: z.string().max(200),
+  industry: z.string().max(200),
+  reason: z.string().max(300).optional(),
+})
+
+export async function validateAndExtract(cv: string, jd: string): Promise<{
+  isValid: boolean; role: string; industry: string; reason?: string
+}> {
+  try {
+    const { data } = await model.generateJson({
+      systemPrompt: 'You are a pre-flight validator.',
+      messages: [{ role: 'user', content: `Validate these inputs and extract role/industry.
+
+${fence('cv', cv, 400)}
+${fence('job_description', jd, 200)}
+
+isValid: false ONLY if the CV is empty/lorem ipsum OR the job description is not a job description.
+Real CVs with any work experience → isValid: true.
+
+Return JSON only: {"isValid":true,"role":"Detected role","industry":"Detected industry","reason":"If invalid, why"}` }],
+      maxTokens: 1000,
+    }, ValidationSchema)
+    return data
+  } catch (err) {
+    console.warn('[analyzer] pre-flight skipped:', err instanceof Error ? err.message.slice(0, 120) : 'error')
+    return { isValid: true, role: 'Professional', industry: 'General' }
+  }
 }
 
 // ─── Step 1: Generate N industry-specific hiring managers ─────────────────────
@@ -81,10 +116,9 @@ export interface AnalysisResult {
 export async function generateManagers(n: number, role: string): Promise<HiringManagerProfile[]> {
   const positiveCount = Math.round(n * 0.45)
   try {
-    const { text } = await generateText({
-      model: groq(MODEL),
-      system: 'You are a persona generation engine. Return only valid JSON arrays, no markdown.',
-      prompt: `Generate exactly ${n} distinct hiring managers for: "${role.slice(0, 300)}"
+    const { data } = await model.generateJson({
+      systemPrompt: 'You are a persona generation engine.',
+      messages: [{ role: 'user', content: `Generate exactly ${n} distinct hiring managers for: "${role.slice(0, 300).replace(/["<>]/g, '')}"
 
 Match managers to the industry and function of the role:
 - Marketing → CMOs, brand managers, growth leads
@@ -97,14 +131,13 @@ Match managers to the industry and function of the role:
 
 Balance: ${positiveCount} growth-minded · rest traditional. Mix company sizes. International names.
 
-Return JSON array of exactly ${n} objects:
-[{"name":"Full Name","role":"Specific title","company":"Industry and stage","yearsHiring":6,"bias":"One sentence evaluation lens"}]`,
-      maxOutputTokens: 2500,
-      providerOptions: GROQ_PROVIDER_OPTIONS,
-    })
-    const parsed = HiringManagerSchema.array().parse(parseJson(text))
-    return parsed.slice(0, n)
-  } catch {
+Return a JSON object {"managers": [...]} with exactly ${n} items shaped like:
+{"name":"Full Name","role":"Specific title","company":"Industry and stage","yearsHiring":6,"bias":"One sentence evaluation lens"}` }],
+      maxTokens: 2500,
+    }, z.object({ managers: HiringManagerSchema.array().min(1) }))
+    return data.managers.slice(0, n)
+  } catch (err) {
+    console.warn('[analyzer] persona generation failed, using generic managers:', err instanceof Error ? err.message.slice(0, 120) : 'error')
     return Array.from({ length: n }, (_, i) => ({
       name: `Hiring Manager ${i + 1}`, role: 'Director of Talent',
       company: 'Tech company', yearsHiring: 5,
@@ -126,34 +159,31 @@ export async function runManager(
   const jdTrunc = jobDescription.slice(0, JD_MAX_CHARS)
 
   try {
-    const { text, usage } = await generateText({
-      model: groq(MODEL),
-      system: `You are ${manager.name}, ${manager.role} at ${manager.company}.
-${manager.yearsHiring} years hiring. Lens: ${manager.bias}
-Be direct — reference actual CV content. 3-5 sentences first person. At least one concrete positive.
-Return ONLY a valid JSON object, no markdown, no extra text.`,
-      prompt: `ROLE: ${jdTrunc}\n\nCV: ${cvTrunc}\n\nReturn JSON only:
-{"reaction":"3-5 sentence honest reaction","wouldAdvance":true,"concerns":["specific concern 1","specific concern 2"],"positives":["specific positive 1","specific positive 2"]}`,
-      maxOutputTokens: 2000,
-      providerOptions: GROQ_PROVIDER_OPTIONS,
-    })
-
-    const parsed = ManagerReactionSchema.parse(parseJson(text))
+    const { data: parsed, meta } = await model.generateJson({
+      systemPrompt: `You are ${manager.name.slice(0, 80)}, ${manager.role.slice(0, 80)} at ${manager.company.slice(0, 80)}.
+${manager.yearsHiring} years hiring. Lens: ${manager.bias.slice(0, 200)}
+Be direct — reference actual CV content. 3-5 sentences first person. At least one concrete positive.`,
+      messages: [{ role: 'user', content: `${fence('job_description', jdTrunc, JD_MAX_CHARS)}\n\n${fence('cv', cvTrunc, CV_MAX_CHARS)}\n\nReturn JSON only:
+{"reaction":"3-5 sentence honest reaction","wouldAdvance":true,"concerns":["specific concern 1","specific concern 2"],"positives":["specific positive 1","specific positive 2"]}` }],
+      maxTokens: 2000,
+    }, ManagerReactionSchema)
     return {
       index, profile: manager,
       wouldAdvance: parsed.wouldAdvance,
       reaction: parsed.reaction,
       concerns: parsed.concerns,
       positives: parsed.positives,
-      tokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+      tokens: meta.tokens,
       durationMs: Date.now() - start,
     }
   } catch (err) {
+    // Provider and parser errors can quote the CV, so only a short generic label leaves the server.
+    console.warn(`[analyzer] manager ${index} failed:`, err instanceof Error ? err.message.slice(0, 120) : 'error')
     return {
       index, profile: manager, wouldAdvance: false,
       reaction: '', concerns: [], positives: [],
       tokens: 0, durationMs: Date.now() - start,
-      error: String(err),
+      error: 'model unavailable',
     }
   }
 }
@@ -193,12 +223,11 @@ export async function synthesizeResults(
   }
 
   try {
-    const { text } = await generateText({
-      model: groq(MODEL),
-      system: 'You are a senior career coach with 15 years of experience. Return only valid JSON, no markdown.',
-      prompt: `Synthesize feedback from ${successful.length} hiring managers.
+    const { data: parsed, meta } = await model.generateJson({
+      systemPrompt: 'You are a senior career coach with 15 years of experience.',
+      messages: [{ role: 'user', content: `Synthesize feedback from ${successful.length} hiring managers.
 
-ROLE: ${jobDescription.slice(0, JD_MAX_CHARS)}
+ROLE: ${fence('job_description', jobDescription, JD_MAX_CHARS)}
 ADVANCE RATE: ${advanceRate}% (${advanceCount}/${successful.length})
 CONCERNS: ${concernSummary}
 POSITIVES: ${positiveSummary}
@@ -206,7 +235,7 @@ POSITIVES: ${positiveSummary}
 REACTIONS:
 ${sampleReactions}
 
-CV: ${cv.slice(0, SYNTH_CV_CHARS)}
+CV: ${fence('cv', cv, SYNTH_CV_CHARS)}
 
 Return JSON only:
 {
@@ -222,15 +251,15 @@ Return JSON only:
 
 For suggestedRoles: 5 roles this candidate can apply to NOW.
 For courseRecommendations: 4 courses targeting exact gaps. priority: high/medium/low.
-For cvAdjustments: 5 specific adjustments.`,
-      maxOutputTokens: 3500,
-      providerOptions: GROQ_PROVIDER_OPTIONS,
-    })
+For cvAdjustments: 5 specific adjustments.` }],
+      maxTokens: 3500,
+    }, AnalysisResultSchema)
 
-    const parsed = AnalysisResultSchema.parse(parseJson(text))
-    return { advanceRate, sentimentBreakdown, ...parsed }
-  } catch {
+    return { advanceRate, sentimentBreakdown, ...parsed, synthesisTokens: meta.tokens }
+  } catch (err) {
+    console.warn('[analyzer] synthesis failed:', err instanceof Error ? err.message.slice(0, 120) : 'error')
     return {
+      degraded: true,
       advanceRate, sentimentBreakdown,
       topStrengths: [], topConcerns: [], keyChanges: [],
       suggestedRoles: [], cvAdjustments: [], courseRecommendations: [],

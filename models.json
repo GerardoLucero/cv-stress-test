@@ -1,0 +1,4 @@
+{
+  "groq": ["openai/gpt-oss-120b"],
+  "nim": ["openai/gpt-oss-20b"]
+}
