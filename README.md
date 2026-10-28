@@ -108,7 +108,9 @@ The app reads it from GitHub (5 minute cache) and falls back to the copy bundled
 
 ## Quality
 
-- 45 unit tests (Vitest), type check and production build on every PR.
+- 50 unit tests (Vitest), type check and production build on every PR.
+- `GET /api/health` reports provider configuration and the active model list without calling any model, for uptime monitors.
+- The stress test shares the interview's provider cascade, fences untrusted text, rate limits per IP and never returns provider error text to the client.
 - Dependabot for npm and GitHub Actions, `npm audit` clean.
 - Security policy in [SECURITY.md](SECURITY.md).
 
