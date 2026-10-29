@@ -7,6 +7,9 @@ export type InterviewerDifficulty = 'junior' | 'mid' | 'senior' | 'staff'
 
 export type HiringDecision = 'STRONG_HIRE' | 'HIRE' | 'LEAN_NO' | 'NO_HIRE'
 
+/** How hard the evaluator pushes. Same rubric and bands; only tone and the bar for "expected" change. */
+export type EvaluationIntensity = 'practice' | 'realistic' | 'demanding'
+
 export interface CandidateInput {
   cv: string
   jobDescription: string
@@ -87,6 +90,8 @@ export interface InterviewSession {
   candidate: CandidateInput
   persona: InterviewerPersona
   totalQuestions: number
+  /** Absent in sessions sealed before this field existed: treated as 'practice'. */
+  intensity?: EvaluationIntensity
   turns: InterviewTurn[]
   currentQuestion: string
   finalScorecard?: FinalScorecard

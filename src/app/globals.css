@@ -68,6 +68,7 @@ h1, h2, h3, h4 { color: var(--heading); line-height: 1.25; font-weight: 700; }
 .form-footer { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; }
 .n-selector { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .n-selector label { font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); min-width: 130px; }
+.n-selector select { background: var(--surface-light); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 0.3rem 0.5rem; font-size: 0.85rem; }
 .n-selector input[type=range] { accent-color: var(--primary); width: 130px; cursor: pointer; }
 .n-hint { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); opacity: 0.65; }
 
