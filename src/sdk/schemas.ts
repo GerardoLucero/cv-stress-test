@@ -94,6 +94,7 @@ export const initBodySchema = z.object({
     .min(LIMITS.minQuestions)
     .max(LIMITS.maxQuestions)
     .default(4),
+  intensity: z.enum(['practice', 'realistic', 'demanding']).default('practice'),
 })
 
 export const answerBodySchema = z.object({

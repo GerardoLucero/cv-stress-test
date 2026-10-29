@@ -10,10 +10,10 @@ interface ScorecardViewProps {
 
 export function ScorecardView({ scorecard, session, onRestart }: ScorecardViewProps) {
   const decisionLabels: Record<string, { label: string; color: string; bg: string }> = {
-    STRONG_HIRE: { label: 'STRONG HIRE (Contratación Inmediata)', color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)' },
-    HIRE: { label: 'HIRE (Avanza a Oferta)', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' },
-    LEAN_NO: { label: 'LEAN NO (Dudas en Áreas Clave)', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
-    NO_HIRE: { label: 'NO HIRE (No cumple barra del rol)', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' },
+    STRONG_HIRE: { label: 'Señal fuerte (muy buen desempeño)', color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)' },
+    HIRE: { label: 'Señal media (desempeño sólido)', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' },
+    LEAN_NO: { label: 'Señal débil (hay áreas por reforzar)', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
+    NO_HIRE: { label: 'Aún no (practica y vuelve a intentarlo)', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' },
   }
 
   const decisionMeta = decisionLabels[scorecard.hiringDecision] ?? decisionLabels.LEAN_NO

@@ -71,6 +71,7 @@ export default function Home() {
   const [selectedPersona, setSelectedPersona] = useState<InterviewerPersona>(PRESET_PERSONAS['staff-architect'])
   const [targetRole, setTargetRole] = useState('')
   const [totalQuestions, setTotalQuestions] = useState(4)
+  const [intensity, setIntensity] = useState<'practice' | 'realistic' | 'demanding'>('practice')
   const [interviewSession, setInterviewSession] = useState<InterviewSession | null>(null)
   const [interviewToken, setInterviewToken] = useState('')
   const [interviewLoading, setInterviewLoading] = useState(false)
@@ -137,6 +138,7 @@ export default function Home() {
             ? { persona: selectedPersona }
             : { personaId: selectedPersona.id }),
           totalQuestions,
+          intensity,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -370,6 +372,14 @@ export default function Home() {
                         onChange={(e) => setTotalQuestions(Number(e.target.value))}
                       />
                       <span className="n-hint">2 = Express · 5 = Completa</span>
+                    </div>
+                    <div className="n-selector">
+                      <label htmlFor="intensity">Intensidad:</label>
+                      <select id="intensity" value={intensity} onChange={(e) => setIntensity(e.target.value as typeof intensity)}>
+                        <option value="practice">Práctica (mentor)</option>
+                        <option value="realistic">Realista</option>
+                        <option value="demanding">Exigente</option>
+                      </select>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Rol / Especialidad (Opcional):</span>

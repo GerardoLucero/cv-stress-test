@@ -11,6 +11,12 @@ describe('request schemas', () => {
     expect(r.totalQuestions).toBe(4)
   })
 
+  it('defaults the evaluation intensity to practice and rejects unknown values', () => {
+    expect(initBodySchema.parse({ cv, jobDescription: jd }).intensity).toBe('practice')
+    expect(initBodySchema.parse({ cv, jobDescription: jd, intensity: 'demanding' }).intensity).toBe('demanding')
+    expect(initBodySchema.safeParse({ cv, jobDescription: jd, intensity: 'brutal' }).success).toBe(false)
+  })
+
   it('rejects oversized input, unknown personas and absurd question counts', () => {
     expect(initBodySchema.safeParse({ cv: 'x'.repeat(20_001), jobDescription: jd }).success).toBe(false)
     expect(initBodySchema.safeParse({ cv, jobDescription: jd, personaId: 'evil' }).success).toBe(false)
