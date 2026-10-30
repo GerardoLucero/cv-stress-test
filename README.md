@@ -15,6 +15,12 @@ It also includes an **Interview Arena**: a live mock interview with an AI interv
 
 **[cv-stress-test.vercel.app](https://cv-stress-test.vercel.app)**
 
+![Interview Arena setup screen](docs/img/home-desktop.png)
+
+<img src="docs/img/home-mobile.png" alt="Mobile layout" width="260">
+
+Built by [Gerardo Lucero](https://gerardolucero.github.io), Solutions Architect and DevSecOps engineer. The interesting part is not the prompts but the engineering around them: provider failover, bounded latency, stateless sessions and validated model output. See [Engineering decisions](#engineering-decisions).
+
 ## Deploy your own (free, 5 min)
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/GerardoLucero/cv-stress-test)
@@ -106,9 +112,27 @@ Edit `models.json` on `main`:
 
 The app reads it from GitHub (5 minute cache) and falls back to the copy bundled in the build. `GROQ_MODEL` / `NVIDIA_MODEL` still work as an emergency override. A scheduled workflow (`Models check`) probes every listed model daily and sends a push notification if one stops answering.
 
+### Evaluation modes
+
+The interview evaluator has three intensities, chosen before starting: **Practice** (mentor tone, default), **Realistic** and **Demanding**. All share one rubric with written score anchors (for example 60 to 74 is "solid with gaps"), and the final decision (strong, medium, weak, not yet) is derived from the score so label and number cannot contradict each other. STAR is applied only to behavioral questions; technical ones are judged on accuracy, trade-offs and clarity.
+
+## Engineering decisions
+
+Short records of the choices that shaped the system, with the alternatives that were rejected and the consequences, including the known limits:
+
+| ADR | Decision |
+|---|---|
+| [0001](docs/adr/0001-stateless-sessions-sealed-token.md) | Stateless sessions in a sealed AES-256-GCM token instead of a database |
+| [0002](docs/adr/0002-provider-cascade-and-time-budget.md) | Groq then NVIDIA NIM, with one time budget shared across retries |
+| [0003](docs/adr/0003-models-json-without-redeploy.md) | Model list in `models.json`, changeable without a deploy |
+| [0004](docs/adr/0004-untrusted-text-and-validated-output.md) | CV text and model output both treated as untrusted |
+
+The August 2026 incident behind ADR 0002 is worth reading: two Groq models were retired, the product broke, and the fallback exceeded the function timeout.
+
 ## Quality
 
-- 50 unit tests (Vitest), type check and production build on every PR.
+- 55 unit tests (Vitest). Coverage across `src/sdk` and `src/lib` is 70% of statements and 72% of lines (`npm run test:coverage`); the interview engine is at 98%. The browser-only speech helper has no tests.
+- Type check and production build on every PR.
 - `GET /api/health` reports provider configuration and the active model list without calling any model, for uptime monitors.
 - The stress test shares the interview's provider cascade, fences untrusted text, rate limits per IP and never returns provider error text to the client.
 - Dependabot for npm and GitHub Actions, `npm audit` clean.
@@ -123,15 +147,12 @@ The app reads it from GitHub (5 minute cache) and falls back to the copy bundled
 - Deployed on Vercel
 
 
-## Support
+## Work with me
 
-Free and open source (MIT). If it helped your job search and you want to say thanks:
-
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/gerardolucero)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/lucerorios0)
-[![GitHub Stars](https://img.shields.io/github/stars/GerardoLucero/cv-stress-test?style=for-the-badge)](https://github.com/GerardoLucero/cv-stress-test/stargazers)
-
+I design and secure platforms (Kubernetes, DevSecOps pipelines, event-driven systems) and build applied AI systems with real failure handling. If you need that, get in touch through [my site](https://gerardolucero.github.io).
 
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+If it helped your job search, a star helps others find it. [Ko-fi](https://ko-fi.com/gerardolucero)
